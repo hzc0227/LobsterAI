@@ -2500,8 +2500,7 @@ if (!gotTheLock) {
 
   ipcMain.handle('scheduledTask:toggle', async (_event, id: string, enabled: boolean) => {
     try {
-      await getCronJobService().toggleJob(id, enabled);
-      const task = await getCronJobService().getJob(id);
+      const task = await getCronJobService().toggleJob(id, enabled);
       return { success: true, task };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Failed to toggle task' };
