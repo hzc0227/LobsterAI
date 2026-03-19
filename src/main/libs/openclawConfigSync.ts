@@ -33,7 +33,9 @@ const mapApiTypeToOpenClawApi = (apiType: 'anthropic' | 'openai' | undefined): '
 };
 
 const ensureDir = (dirPath: string): void => {
-  fs.mkdirSync(dirPath, { recursive: true });
+  if (!fs.existsSync(dirPath)) {
+    fs.mkdirSync(dirPath, { recursive: true });
+  }
 };
 
 const normalizeModelName = (modelId: string): string => {
@@ -551,7 +553,7 @@ export class OpenClawConfigSync {
           sandbox: {
             mode: sandboxMode,
           },
-          ...(workspaceDir ? { workspace: workspaceDir } : {}),
+          ...(workspaceDir ? { workspace: path.resolve(workspaceDir) } : {}),
         },
       },
       session: {
