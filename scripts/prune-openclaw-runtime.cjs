@@ -64,8 +64,6 @@ const DIRS_TO_DELETE = new Set([
 
 const PACKAGES_TO_STUB = [
   'koffi',            // Windows FFI for terminal PTY — not needed in gateway mode
-  'pdfjs-dist',       // Browser-side PDF rendering — gateway is a backend process
-  'playwright-core',  // Browser automation — gateway doesn't launch browsers
 ];
 
 const GENERIC_STUB_INDEX_CJS = `// Stub (CJS): this package is not needed for headless gateway operation.
@@ -199,6 +197,22 @@ function main() {
   // Step 1: Replace large unnecessary packages with stubs
   for (const pkgName of PACKAGES_TO_STUB) {
     stubPackage(path.join(nodeModulesDir, pkgName), pkgName, stats);
+  }
+
+  // Step 1b: Remove broken .bin symlinks left behind by stubbed packages
+  const binDir = path.join(nodeModulesDir, '.bin');
+  if (fs.existsSync(binDir)) {
+    try {
+      for (const entry of fs.readdirSync(binDir)) {
+        const linkPath = path.join(binDir, entry);
+        try {
+          fs.statSync(linkPath); // follows symlink — throws if target is missing
+        } catch {
+          fs.unlinkSync(linkPath);
+          stats.filesRemoved++;
+        }
+      }
+    } catch { /* ignore */ }
   }
 
   // Step 2: Clean unnecessary files from node_modules only
