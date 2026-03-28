@@ -45,10 +45,9 @@ import {
   OpenClawChannelSessionSync,
   buildManagedSessionKey,
   DEFAULT_MANAGED_AGENT_ID,
-  CHANNEL_PLATFORM_MAP,
-  PLATFORM_TO_CHANNEL_MAP,
 } from './libs/openclawChannelSessionSync';
-import { IMGatewayManager, IMPlatform, IMGatewayConfig } from './im';
+import { IMGatewayManager, IMGatewayConfig } from './im';
+import type { Platform } from './im/types';
 import { APP_NAME } from './appConstants';
 import { getSkillServiceManager } from './skillServices';
 import { createTray, destroyTray, updateTrayMenu } from './trayManager';
@@ -58,6 +57,7 @@ import { McpStore } from './mcpStore';
 import { CronJobService } from '../scheduled-task/cronJobService';
 import { migrateScheduledTasksToOpenclaw, migrateScheduledTaskRunsToOpenclaw } from '../scheduled-task/migrate';
 import { buildScheduledTaskEnginePrompt } from '../scheduled-task/enginePrompt';
+import { PlatformRegistry } from '../shared/platform';
 import { IpcChannel as ScheduledTaskIpc, DeliveryMode as STDeliveryMode, SessionTarget as STSessionTarget, PayloadKind as STPayloadKind } from '../scheduled-task/constants';
 import { McpServerManager } from './libs/mcpServerManager';
 import { getServerApiBaseUrl, refreshEndpointsTestMode } from './libs/endpoints';
@@ -90,18 +90,6 @@ const IPC_MAX_KEYS = 80;
 const IPC_MAX_ITEMS = 40;
 const MAX_INLINE_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 const ENGINE_NOT_READY_CODE = 'ENGINE_NOT_READY';
-const SCHEDULED_TASK_CHANNEL_OPTIONS = [
-  { value: 'dingtalk', label: 'DingTalk' },
-  { value: 'feishu', label: 'Feishu' },
-  { value: 'telegram', label: 'Telegram' },
-  { value: 'discord', label: 'Discord' },
-  { value: 'qqbot', label: 'QQ' },
-  { value: 'wecom', label: 'WeCom' },
-  { value: 'popo', label: 'POPO' },
-  { value: 'nim', label: 'NIM' },
-  { value: 'openclaw-weixin', label: 'WeChat' },
-  { value: 'netease-bee', label: 'NetEase Bee' },
-] as const;
 const MIME_EXTENSION_MAP: Record<string, string> = {
   'image/png': '.png',
   'image/jpeg': '.jpg',
@@ -1363,7 +1351,7 @@ const getIMGatewayManager = () => {
           //     sessionId,
           //   );
           // }
-          const channelName = PLATFORM_TO_CHANNEL_MAP[message.platform];
+          const channelName = PlatformRegistry.channelOf(message.platform);
           const hasChannel = !!(channelName && message.conversationId);
           // Strip IM subtype prefix (e.g. "direct:ou_xxx" -> "ou_xxx")
           let deliveryTo = message.conversationId;
@@ -1490,7 +1478,7 @@ function listScheduledTaskChannels(): Array<{ value: string; label: string }> {
   const manager = getIMGatewayManager();
   const config = manager?.getConfig();
   if (!config) {
-    return [...SCHEDULED_TASK_CHANNEL_OPTIONS];
+    return [...PlatformRegistry.channelOptions()];
   }
 
   const enabledConfigKeys = new Set<string>();
@@ -1503,7 +1491,7 @@ function listScheduledTaskChannels(): Array<{ value: string; label: string }> {
     }
   }
 
-  return SCHEDULED_TASK_CHANNEL_OPTIONS.filter((option) => {
+  return PlatformRegistry.channelOptions().filter((option) => {
     if (option.value === 'dingtalk') {
       return enabledConfigKeys.has('dingtalk');
     }
@@ -3266,7 +3254,7 @@ if (!gotTheLock) {
       // can locate the correct conversation.
       const delivery = normalizedInput.delivery;
       if (delivery && delivery.mode === STDeliveryMode.Announce && delivery.channel && delivery.to) {
-        const platform = CHANNEL_PLATFORM_MAP[delivery.channel] as IMPlatform | undefined;
+        const platform = PlatformRegistry.platformOfChannel(delivery.channel);
         if (platform) {
           console.log('[IPC][scheduledTask:create] IM notification target detected, using OpenClaw native announce delivery.',
             JSON.stringify({ channel: delivery.channel, to: delivery.to, platform }));
@@ -3317,7 +3305,7 @@ if (!gotTheLock) {
       // Same OpenClaw native announce delivery logic as create handler.
       const delivery = normalizedInput.delivery;
       if (delivery && delivery.mode === STDeliveryMode.Announce && delivery.channel && delivery.to) {
-        const platform = CHANNEL_PLATFORM_MAP[delivery.channel] as IMPlatform | undefined;
+        const platform = PlatformRegistry.platformOfChannel(delivery.channel);
         if (platform) {
           console.log('[IPC][scheduledTask:update] IM notification target detected, using OpenClaw native announce delivery.',
             JSON.stringify({ channel: delivery.channel, to: delivery.to, platform }));
@@ -3444,7 +3432,7 @@ if (!gotTheLock) {
   ipcMain.handle(ScheduledTaskIpc.ListChannelConversations, async (_event, channel: string) => {
     try {
       console.log('[IPC][listChannelConversations] channel:', channel);
-      const platform = CHANNEL_PLATFORM_MAP[channel] as IMPlatform | undefined;
+      const platform = PlatformRegistry.platformOfChannel(channel);
       console.log('[IPC][listChannelConversations] resolved platform:', platform);
       if (!platform) {
         console.log('[IPC][listChannelConversations] no platform mapping, returning empty');
@@ -3614,7 +3602,7 @@ if (!gotTheLock) {
     }
   });
 
-  ipcMain.handle('im:gateway:start', async (_event, platform: IMPlatform) => {
+  ipcMain.handle('im:gateway:start', async (_event, platform: Platform) => {
     try {
       // Persist enabled state
       const manager = getIMGatewayManager();
@@ -3629,7 +3617,7 @@ if (!gotTheLock) {
     }
   });
 
-  ipcMain.handle('im:gateway:stop', async (_event, platform: IMPlatform) => {
+  ipcMain.handle('im:gateway:stop', async (_event, platform: Platform) => {
     try {
       // Persist disabled state
       const manager = getIMGatewayManager();
@@ -3646,7 +3634,7 @@ if (!gotTheLock) {
 
   ipcMain.handle('im:gateway:test', async (
     _event,
-    platform: IMPlatform,
+    platform: Platform,
     configOverride?: Partial<IMGatewayConfig>
   ) => {
     try {
