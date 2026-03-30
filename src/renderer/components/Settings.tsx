@@ -60,6 +60,11 @@ interface SettingsProps extends SettingsOpenOptions {
 }
 
 
+const CUSTOM_PROVIDER_KEYS = [
+  'custom_0', 'custom_1', 'custom_2', 'custom_3', 'custom_4',
+  'custom_5', 'custom_6', 'custom_7', 'custom_8', 'custom_9',
+] as const;
+
 const providerKeys = [
   'openai',
   'gemini',
@@ -75,6 +80,7 @@ const providerKeys = [
   'xiaomi',
   'openrouter',
   'ollama',
+  ...CUSTOM_PROVIDER_KEYS,
 ] as const;
 
 type ProviderType = (typeof providerKeys)[number];
@@ -130,7 +136,7 @@ interface ProvidersImportPayload {
   providers?: Record<string, ProvidersImportEntry>;
 }
 
-const providerMeta: Record<string, { label: string; icon: React.ReactNode }> = {
+const providerMeta: Record<ProviderType, { label: string; icon: React.ReactNode }> = {
   openai: { label: 'OpenAI', icon: <OpenAIIcon /> },
   deepseek: { label: 'DeepSeek', icon: <DeepSeekIcon /> },
   gemini: { label: 'Gemini', icon: <GeminiIcon /> },
@@ -145,6 +151,9 @@ const providerMeta: Record<string, { label: string; icon: React.ReactNode }> = {
   volcengine: { label: 'Volcengine', icon: <VolcengineIcon /> },
   openrouter: { label: 'OpenRouter', icon: <OpenRouterIcon /> },
   ollama: { label: 'Ollama', icon: <OllamaIcon /> },
+  ...Object.fromEntries(
+    CUSTOM_PROVIDER_KEYS.map(key => [key, { label: getCustomProviderDefaultName(key), icon: <CustomProviderIcon /> }])
+  ) as Record<(typeof CUSTOM_PROVIDER_KEYS)[number], { label: string; icon: React.ReactNode }>,
 };
 
 const providerSwitchableDefaultBaseUrls: Partial<Record<ProviderType, { anthropic: string; openai: string }>> = {
@@ -186,7 +195,7 @@ const providerSwitchableDefaultBaseUrls: Partial<Record<ProviderType, { anthropi
   },
 };
 
-const providerRequiresApiKey = (provider: string) => provider !== 'ollama';
+const providerRequiresApiKey = (provider: ProviderType) => provider !== 'ollama';
 const normalizeBaseUrl = (baseUrl: string): string => baseUrl.trim().replace(/\/+$/, '').toLowerCase();
 const normalizeApiFormat = (value: unknown): 'anthropic' | 'openai' => (
   value === 'openai' ? 'openai' : 'anthropic'
@@ -421,6 +430,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, onUpda
   const [testResult, setTestResult] = useState<ProviderConnectionTestResult | null>(null);
   const [isTestResultModalOpen, setIsTestResultModalOpen] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
+  const [pendingDeleteProvider, setPendingDeleteProvider] = useState<ProviderType | null>(null);
   const [isImportingProviders, setIsImportingProviders] = useState(false);
   const [isExportingProviders, setIsExportingProviders] = useState(false);
   const initialThemeRef = useRef<'light' | 'dark' | 'system'>(themeService.getTheme());
@@ -428,7 +438,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, onUpda
   const didSaveRef = useRef(false);
 
   // Add state for active provider
-  const [activeProvider, setActiveProvider] = useState<string>(getDefaultActiveProvider());
+  const [activeProvider, setActiveProvider] = useState<ProviderType>(getDefaultActiveProvider());
   const [showApiKey, setShowApiKey] = useState(false);
 
   // MiniMax OAuth state
@@ -870,32 +880,27 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, onUpda
     return unsubscribe;
   }, []);
 
-  // Compute visible providers based on language, including dynamic custom_N entries
+  // Compute visible providers based on language, including active custom_N entries
   const visibleProviders = useMemo(() => {
     const visibleKeys = getVisibleProviders(language);
-    const filtered: Record<string, ProviderConfig> = {};
+    const filtered: Partial<ProvidersConfig> = {};
     for (const key of visibleKeys) {
       if (providers[key as keyof ProvidersConfig]) {
-        filtered[key] = providers[key as keyof ProvidersConfig];
+        filtered[key as keyof ProvidersConfig] = providers[key as keyof ProvidersConfig];
       }
     }
-    // Append custom_N providers sorted by numeric suffix
-    const customKeys = Object.keys(providers)
-      .filter(isCustomProvider)
-      .sort((a, b) => {
-        const numA = parseInt(a.replace('custom_', ''), 10);
-        const numB = parseInt(b.replace('custom_', ''), 10);
-        return numA - numB;
-      });
-    for (const key of customKeys) {
-      filtered[key] = providers[key];
+    // Append custom_N providers that exist in state, sorted by numeric suffix
+    for (const key of CUSTOM_PROVIDER_KEYS) {
+      if (providers[key]) {
+        filtered[key] = providers[key];
+      }
     }
-    return filtered;
+    return filtered as ProvidersConfig;
   }, [language, providers]);
 
   // Ensure activeProvider is always in visibleProviders when language changes
   useEffect(() => {
-    const visibleKeys = Object.keys(visibleProviders);
+    const visibleKeys = Object.keys(visibleProviders) as ProviderType[];
     if (visibleKeys.length > 0 && !visibleKeys.includes(activeProvider)) {
       // If current activeProvider is not visible, switch to first visible provider
       const firstEnabledVisible = visibleKeys.find(key => visibleProviders[key]?.enabled);
@@ -905,8 +910,10 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, onUpda
 
   // Handle adding a new custom provider
   const handleAddCustomProvider = () => {
-    const nextId = configService.getConfig().customProviderNextId ?? 0;
-    const newKey = `custom_${nextId}`;
+    // Find the first unused custom slot
+    const usedKeys = new Set(Object.keys(providers));
+    const newKey = CUSTOM_PROVIDER_KEYS.find(k => !usedKeys.has(k));
+    if (!newKey) return; // All 10 slots used
     setProviders(prev => ({
       ...prev,
       [newKey]: {
@@ -918,8 +925,6 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, onUpda
         displayName: undefined,
       },
     }));
-    // Increment the counter and save immediately
-    configService.updateConfig({ customProviderNextId: nextId + 1 });
     setActiveProvider(newKey);
     setShowApiKey(false);
     setIsAddingModel(false);
@@ -932,22 +937,34 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, onUpda
   };
 
   // Handle deleting a custom provider
-  const handleDeleteCustomProvider = (key: string) => {
+  const handleDeleteCustomProvider = (key: ProviderType) => {
+    setPendingDeleteProvider(key);
+  };
+
+  const confirmDeleteCustomProvider = () => {
+    const key = pendingDeleteProvider;
+    if (!key) return;
+    setPendingDeleteProvider(null);
     setProviders(prev => {
       const next = { ...prev };
       delete next[key];
       return next;
     });
+    // Persist the deletion immediately so it survives window close
+    const currentConfig = configService.getConfig();
+    const updatedProviders = { ...currentConfig.providers };
+    delete updatedProviders[key];
+    configService.updateConfig({ providers: updatedProviders as AppConfig['providers'] });
     // If the deleted provider was active, switch to first visible
     if (activeProvider === key) {
-      const visibleKeys = Object.keys(visibleProviders).filter(k => k !== key);
+      const visibleKeys = Object.keys(visibleProviders).filter(k => k !== key) as ProviderType[];
       const firstEnabled = visibleKeys.find(k => visibleProviders[k]?.enabled);
       setActiveProvider(firstEnabled ?? visibleKeys[0] ?? providerKeys[0]);
     }
   };
 
   // Handle provider change
-  const handleProviderChange = (provider: string) => {
+  const handleProviderChange = (provider: ProviderType) => {
     setIsAddingModel(false);
     setIsEditingModel(false);
     setEditingModelId(null);
@@ -962,7 +979,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, onUpda
   };
 
   // Handle provider configuration change
-  const handleProviderConfigChange = (provider: string, field: string, value: string) => {
+  const handleProviderConfigChange = (provider: ProviderType, field: string, value: string) => {
     setProviders(prev => {
       if (field === 'apiFormat') {
         const nextApiFormat = getEffectiveApiFormat(provider, value);
@@ -1366,7 +1383,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, onUpda
   };
 
   // Toggle provider enabled status
-  const toggleProviderEnabled = (provider: string) => {
+  const toggleProviderEnabled = (provider: ProviderType) => {
     const providerConfig = providers[provider];
     const isEnabling = !providerConfig.enabled;
     const missingApiKey = providerRequiresApiKey(provider) && !providerConfig.apiKey.trim();
@@ -1385,7 +1402,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, onUpda
     }));
   };
 
-  const enableProvider = (provider: string) => {
+  const enableProvider = (provider: ProviderType) => {
     setProviders(prev => {
       if (prev[provider].enabled) {
         return prev;
@@ -2579,17 +2596,18 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, onUpda
                 onChange={handleImportProviders}
               />
               {Object.entries(visibleProviders).map(([provider, config]) => {
+                const providerKey = provider as ProviderType;
                 const isCustom = isCustomProvider(provider);
-                const providerInfo = providerMeta[provider];
-                const missingApiKey = providerRequiresApiKey(provider) && !config.apiKey.trim();
+                const providerInfo = providerMeta[providerKey];
+                const missingApiKey = providerRequiresApiKey(providerKey) && !config.apiKey.trim();
                 const canToggleProvider = config.enabled || !missingApiKey;
                 const displayLabel = isCustom
-                  ? (config.displayName || getCustomProviderDefaultName(provider))
+                  ? ((config as ProviderConfig).displayName || getCustomProviderDefaultName(provider))
                   : (providerInfo?.label ?? getProviderDisplayName(provider));
                 return (
                   <div
                     key={provider}
-                    onClick={() => handleProviderChange(provider)}
+                    onClick={() => handleProviderChange(providerKey)}
                     className={`group flex items-center p-2 rounded-xl cursor-pointer transition-colors ${
                       activeProvider === provider
                         ? 'bg-claude-accent/10 dark:bg-claude-accent/20 border border-claude-accent/30 shadow-subtle'
@@ -2624,7 +2642,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, onUpda
                           className="opacity-0 group-hover:opacity-100 transition-opacity text-claude-secondaryText hover:text-red-500 dark:text-claude-darkSecondaryText dark:hover:text-red-400 p-0.5"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleDeleteCustomProvider(provider);
+                            handleDeleteCustomProvider(providerKey);
                           }}
                           title={i18nService.t('deleteCustomProvider')}
                         >
@@ -2645,7 +2663,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, onUpda
                           if (!canToggleProvider) {
                             return;
                           }
-                          toggleProviderEnabled(provider);
+                          toggleProviderEnabled(providerKey);
                         }}
                       >
                         <div
@@ -2659,6 +2677,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, onUpda
                 );
               })}
               {/* Add Custom Provider Button */}
+              {CUSTOM_PROVIDER_KEYS.some(k => !providers[k]) && (
               <button
                 type="button"
                 onClick={handleAddCustomProvider}
@@ -2666,6 +2685,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, onUpda
               >
                 {i18nService.t('addCustomProvider')}
               </button>
+              )}
             </div>
 
             {/* Provider Settings - Right Side */}
@@ -2673,7 +2693,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, onUpda
               <div className="flex items-center justify-between pb-2 border-b dark:border-claude-darkBorder border-claude-border">
                 <h3 className="text-base font-medium dark:text-claude-darkText text-claude-text">
                   {isCustomProvider(activeProvider)
-                    ? (providers[activeProvider]?.displayName || getCustomProviderDefaultName(activeProvider))
+                    ? ((providers[activeProvider] as ProviderConfig)?.displayName || getCustomProviderDefaultName(activeProvider))
                     : (providerMeta[activeProvider]?.label ?? getProviderDisplayName(activeProvider))
                   } {i18nService.t('providerSettings')}
                 </h3>
@@ -2944,7 +2964,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, onUpda
                   <input
                     type="text"
                     id={`${activeProvider}-displayName`}
-                    value={providers[activeProvider]?.displayName ?? ''}
+                    value={(providers[activeProvider] as ProviderConfig)?.displayName ?? ''}
                     onChange={(e) => handleProviderConfigChange(activeProvider, 'displayName', e.target.value)}
                     className="block w-full rounded-xl bg-claude-surfaceInset dark:bg-claude-darkSurfaceInset dark:border-claude-darkBorder border-claude-border border focus:border-claude-accent focus:ring-1 focus:ring-claude-accent/30 dark:text-claude-darkText text-claude-text px-3 py-2 text-xs"
                     placeholder={i18nService.t('customDisplayNamePlaceholder')}
@@ -3665,6 +3685,40 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, onUpda
                   className="px-3 py-1.5 text-xs font-medium rounded-xl border dark:border-claude-darkBorder border-claude-border dark:text-claude-darkText text-claude-text dark:hover:bg-claude-darkSurfaceHover hover:bg-claude-surfaceHover transition-colors active:scale-[0.98]"
                 >
                   {i18nService.t('close')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {pendingDeleteProvider && (
+          <div
+            className="absolute inset-0 z-20 flex items-center justify-center bg-black/35 px-4 rounded-2xl"
+            onClick={() => setPendingDeleteProvider(null)}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm rounded-2xl dark:bg-claude-darkSurface bg-claude-bg dark:border-claude-darkBorder border-claude-border border shadow-modal p-4"
+            >
+              <p className="text-sm dark:text-claude-darkText text-claude-text">
+                {i18nService.t('confirmDeleteCustomProvider')}
+              </p>
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPendingDeleteProvider(null)}
+                  className="px-3 py-1.5 text-xs font-medium rounded-xl border dark:border-claude-darkBorder border-claude-border dark:text-claude-darkText text-claude-text dark:hover:bg-claude-darkSurfaceHover hover:bg-claude-surfaceHover transition-colors active:scale-[0.98]"
+                >
+                  {i18nService.t('cancel')}
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDeleteCustomProvider}
+                  className="px-3 py-1.5 text-xs font-medium rounded-xl bg-red-500 hover:bg-red-600 text-white transition-colors active:scale-[0.98]"
+                >
+                  {i18nService.t('deleteCustomProvider')}
                 </button>
               </div>
             </div>

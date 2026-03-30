@@ -67,42 +67,27 @@ const normalizeProvidersConfig = (providers: AppConfig['providers']): AppConfig[
 };
 
 /**
- * Migrate legacy single `custom` provider to `custom_0` and initialize counter.
- * Also ensures customProviderNextId is consistent with existing custom_N keys.
+ * Migrate legacy single `custom` provider to `custom_0`.
  */
 const migrateCustomProviders = (config: AppConfig): AppConfig => {
   const providers = config.providers;
   if (!providers) return config;
 
-  const updatedProviders = { ...providers };
-  let nextId = config.customProviderNextId ?? 0;
-
   // Migrate legacy `custom` key (without underscore) to `custom_0`
-  if ('custom' in updatedProviders && !isCustomProvider('custom')) {
-    const legacyCustom = updatedProviders['custom'];
-    // Only migrate if it has meaningful data (apiKey or baseUrl set)
+  if ('custom' in providers && !isCustomProvider('custom')) {
+    const legacyCustom = providers['custom'];
     if (legacyCustom) {
+      const updatedProviders = { ...providers };
       updatedProviders['custom_0'] = { ...legacyCustom };
       delete updatedProviders['custom'];
-      nextId = Math.max(nextId, 1);
+      return {
+        ...config,
+        providers: updatedProviders as AppConfig['providers'],
+      };
     }
   }
 
-  // Ensure nextId is greater than all existing custom_N suffixes
-  for (const key of Object.keys(updatedProviders)) {
-    if (isCustomProvider(key)) {
-      const suffix = parseInt(key.replace('custom_', ''), 10);
-      if (!isNaN(suffix) && suffix >= nextId) {
-        nextId = suffix + 1;
-      }
-    }
-  }
-
-  return {
-    ...config,
-    providers: updatedProviders as AppConfig['providers'],
-    customProviderNextId: nextId,
-  };
+  return config;
 };
 
 // Model IDs that have been removed from specific providers.
