@@ -813,12 +813,12 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
                   </button>
                 ) : (
                   <div className="relative">
-                    <div className="flex items-stretch rounded-xl shadow-subtle hover:shadow-card">
+                    <div className={`flex items-stretch rounded-xl shadow-subtle hover:shadow-card ${!canSubmit ? 'opacity-50' : ''}`}>
                       <button
                         type="button"
                         onClick={handleSubmit}
                         disabled={!canSubmit}
-                        className="p-2 rounded-l-xl bg-primary hover:bg-primary-hover text-white transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="p-2 rounded-l-xl bg-primary hover:bg-primary-hover text-white transition-all active:scale-95 disabled:cursor-not-allowed"
                         aria-label="Send"
                         title={currentSendShortcut !== 'Enter' ? getSendShortcutLabel(currentSendShortcut) : undefined}
                       >
@@ -880,12 +880,12 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
               </button>
             ) : (
               <div className="relative flex-shrink-0">
-                <div className="flex items-stretch rounded-lg shadow-subtle hover:shadow-card">
+                <div className={`flex items-stretch rounded-lg shadow-subtle hover:shadow-card ${!canSubmit ? 'opacity-50' : ''}`}>
                   <button
                     type="button"
                     onClick={handleSubmit}
                     disabled={!canSubmit}
-                    className="p-2 rounded-l-lg bg-primary hover:bg-primary-hover text-white transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="p-2 rounded-l-lg bg-primary hover:bg-primary-hover text-white transition-all active:scale-95 disabled:cursor-not-allowed"
                     aria-label="Send"
                     title={currentSendShortcut !== 'Enter' ? getSendShortcutLabel(currentSendShortcut) : undefined}
                   >
