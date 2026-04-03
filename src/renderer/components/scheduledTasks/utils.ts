@@ -1,14 +1,15 @@
 import cronstrue from 'cronstrue/i18n';
-import { PlatformRegistry } from '../../../shared/platform';
-import { i18nService } from '../../services/i18n';
+
 import type {
+  Schedule,
+  ScheduleCron,
   ScheduledTask,
   ScheduledTaskDelivery,
   ScheduledTaskPayload,
-  Schedule,
-  ScheduleCron,
   TaskLastStatus,
 } from '../../../scheduledTask/types';
+import { PlatformRegistry } from '../../../shared/platform';
+import { i18nService } from '../../services/i18n';
 
 const WEEKDAY_KEYS = [
   'scheduledTasksFormWeekSun',
