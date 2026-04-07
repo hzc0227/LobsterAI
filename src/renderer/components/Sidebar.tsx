@@ -1,6 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import Modal from './common/Modal';
 import { useSelector } from 'react-redux';
+import {
+  selectCoworkSessions,
+  selectCurrentSessionId,
+} from '../store/selectors/coworkSelectors';
 import { RootState } from '../store';
 import { agentService } from '../services/agent';
 import { coworkService } from '../services/cowork';
@@ -49,13 +53,14 @@ const Sidebar: React.FC<SidebarProps> = ({
   hideLogin,
 }) => {
   const currentAgentId = useSelector((state: RootState) => state.agent.currentAgentId);
-  const sessions = useSelector((state: RootState) => state.cowork.sessions);
+  const sessions = useSelector(selectCoworkSessions);
   const filteredSessions = sessions.filter((s) => !s.agentId || s.agentId === currentAgentId);
-  const currentSessionId = useSelector((state: RootState) => state.cowork.currentSessionId);
+  const currentSessionId = useSelector(selectCurrentSessionId);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
   const isMac = window.electron.platform === 'darwin';
 
   useEffect(() => {
@@ -247,12 +252,14 @@ const Sidebar: React.FC<SidebarProps> = ({
       <div className="flex-1 overflow-y-auto px-2.5 pb-4">
         <SidebarAgentList
           onShowCowork={onShowCowork}
+          onSessionsLoadingChange={setSessionsLoading}
         />
         <div className="px-3 pb-2 text-sm font-medium text-secondary">
           {i18nService.t('coworkHistory')}
         </div>
         <CoworkSessionList
           sessions={filteredSessions}
+          isLoading={sessionsLoading}
           currentSessionId={currentSessionId}
           isBatchMode={isBatchMode}
           selectedIds={selectedIds}
@@ -367,7 +374,8 @@ const Sidebar: React.FC<SidebarProps> = ({
 
 const SidebarAgentList: React.FC<{
   onShowCowork: () => void;
-}> = ({ onShowCowork }) => {
+  onSessionsLoadingChange: (loading: boolean) => void;
+}> = ({ onShowCowork, onSessionsLoadingChange }) => {
   const agents = useSelector((state: RootState) => state.agent.agents);
   const currentAgentId = useSelector((state: RootState) => state.agent.currentAgentId);
 
@@ -377,11 +385,16 @@ const SidebarAgentList: React.FC<{
 
   const enabledAgents = agents.filter((a) => a.enabled);
 
-  const handleSwitch = (agentId: string) => {
+  const handleSwitch = async (agentId: string) => {
     if (agentId === currentAgentId) return;
     agentService.switchAgent(agentId);
-    coworkService.loadSessions(agentId);
     onShowCowork();
+    onSessionsLoadingChange(true);
+    try {
+      await coworkService.loadSessions(agentId);
+    } finally {
+      onSessionsLoadingChange(false);
+    }
   };
 
   return (

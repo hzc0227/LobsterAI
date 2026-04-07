@@ -1,5 +1,5 @@
-import { XMarkIcon } from '@heroicons/react/24/outline';
-import React, { useEffect, useState } from 'react';
+import { ExclamationTriangleIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 
 import { agentService } from '../../services/agent';
@@ -47,13 +47,27 @@ const AgentCreateModal: React.FC<AgentCreateModalProps> = ({ isOpen, onClose }) 
   const [activeTab, setActiveTab] = useState<CreateTab>('basic');
   const availableModels = useSelector((state: RootState) => state.model.availableModels);
   const globalSelectedModel = useSelector((state: RootState) => state.model.selectedModel);
+  const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
 
   // IM binding state
   const [imConfig, setImConfig] = useState<IMGatewayConfig | null>(null);
   const [boundPlatforms, setBoundPlatforms] = useState<Set<IMPlatform>>(new Set());
 
+  const isDirty = useCallback((): boolean => {
+    return !!(name || description || systemPrompt || identity || icon || skillIds.length > 0 || boundPlatforms.size > 0);
+  }, [name, description, systemPrompt, identity, icon, skillIds, boundPlatforms]);
+
   useEffect(() => {
     if (!isOpen) return;
+    setName('');
+    setDescription('');
+    setSystemPrompt('');
+    setIdentity('');
+    setIcon('');
+    setSkillIds([]);
+    setActiveTab('basic');
+    setShowUnsavedConfirm(false);
+    setBoundPlatforms(new Set());
     imService.loadConfig().then((cfg) => {
       if (cfg) setImConfig(cfg);
     });
@@ -76,6 +90,19 @@ const AgentCreateModal: React.FC<AgentCreateModalProps> = ({ isOpen, onClose }) 
     setSkillIds([]);
     setActiveTab('basic');
     setBoundPlatforms(new Set());
+  };
+
+  const handleClose = () => {
+    if (isDirty()) {
+      setShowUnsavedConfirm(true);
+    } else {
+      onClose();
+    }
+  };
+
+  const handleConfirmDiscard = () => {
+    setShowUnsavedConfirm(false);
+    onClose();
   };
 
   const handleCreate = async () => {
@@ -106,7 +133,11 @@ const AgentCreateModal: React.FC<AgentCreateModalProps> = ({ isOpen, onClose }) 
         agentService.switchAgent(agent.id);
         onClose();
         resetForm();
+      } else {
+        window.dispatchEvent(new CustomEvent('app:showToast', { detail: i18nService.t('agentCreateFailed') }));
       }
+    } catch {
+      window.dispatchEvent(new CustomEvent('app:showToast', { detail: i18nService.t('agentCreateFailed') }));
     } finally {
       setCreating(false);
     }
@@ -134,7 +165,8 @@ const AgentCreateModal: React.FC<AgentCreateModalProps> = ({ isOpen, onClose }) 
   ];
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} className="w-full max-w-2xl mx-4 rounded-xl shadow-xl bg-surface border border-border max-h-[80vh] flex flex-col">
+    <>
+    <Modal isOpen={isOpen} onClose={handleClose} className="w-full max-w-2xl mx-4 rounded-xl shadow-xl bg-surface border border-border max-h-[80vh] flex flex-col">
         {/* Header: agent icon + name + close */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2">
@@ -143,7 +175,7 @@ const AgentCreateModal: React.FC<AgentCreateModalProps> = ({ isOpen, onClose }) 
               {name || (i18nService.t('createAgent') || 'Create Agent')}
             </h3>
           </div>
-          <button type="button" onClick={onClose} className="p-1 rounded-lg hover:bg-surface-raised">
+          <button type="button" onClick={handleClose} className="p-1 rounded-lg hover:bg-surface-raised">
             <XMarkIcon className="h-5 w-5 text-secondary" />
           </button>
         </div>
@@ -313,7 +345,7 @@ const AgentCreateModal: React.FC<AgentCreateModalProps> = ({ isOpen, onClose }) 
         <div className="flex justify-end gap-2 px-5 py-4 border-t border-border">
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="px-4 py-2 text-sm font-medium rounded-lg text-secondary hover:bg-surface-raised transition-colors"
           >
             {i18nService.t('cancel') || 'Cancel'}
@@ -328,6 +360,49 @@ const AgentCreateModal: React.FC<AgentCreateModalProps> = ({ isOpen, onClose }) 
           </button>
         </div>
     </Modal>
+
+    {/* Unsaved Changes Confirmation Modal */}
+    {showUnsavedConfirm && (
+      <div
+        className="fixed inset-0 z-[9999] flex items-center justify-center"
+        onClick={() => setShowUnsavedConfirm(false)}
+      >
+        <div className="absolute inset-0 bg-black/40 dark:bg-black/60" />
+        <div
+          className="relative w-80 rounded-xl shadow-2xl bg-surface border border-border p-5"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex flex-col items-center text-center">
+            <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mb-3">
+              <ExclamationTriangleIcon className="w-5 h-5 text-amber-500" />
+            </div>
+            <h3 className="text-sm font-semibold text-foreground mb-2">
+              {i18nService.t('agentUnsavedTitle') || 'Unsaved Changes'}
+            </h3>
+            <p className="text-sm text-secondary mb-5">
+              {i18nService.t('agentUnsavedMessage') || 'You have unsaved changes. Are you sure you want to discard them?'}
+            </p>
+            <div className="flex items-center gap-3 w-full">
+              <button
+                type="button"
+                onClick={() => setShowUnsavedConfirm(false)}
+                className="flex-1 px-4 py-2 text-sm rounded-lg text-foreground border border-border hover:bg-surface-raised transition-colors"
+              >
+                {i18nService.t('cancel') || 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDiscard}
+                className="flex-1 px-4 py-2 text-sm rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors"
+              >
+                {i18nService.t('discard') || 'Discard'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };
 

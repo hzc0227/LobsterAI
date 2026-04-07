@@ -2,12 +2,14 @@ import { ExclamationTriangleIcon,PhotoIcon } from '@heroicons/react/24/outline';
 import { FolderIcon,PaperAirplaneIcon, StopIcon } from '@heroicons/react/24/solid';
 import React, { useCallback,useEffect, useRef, useState } from 'react';
 import { useDispatch,useSelector } from 'react-redux';
-
 import { agentService } from '../../services/agent';
 import { i18nService } from '../../services/i18n';
+import { configService } from '../../services/config';
+import { defaultConfig } from '../../config';
 import { skillService } from '../../services/skill';
 import { RootState } from '../../store';
-import { clearDraftAttachments, type DraftAttachment,setDraftAttachments, setDraftPrompt } from '../../store/slices/coworkSlice';
+import { selectDraftPrompts } from '../../store/selectors/coworkSelectors';
+import { addDraftAttachment, clearDraftAttachments, type DraftAttachment, setDraftAttachments, setDraftPrompt } from '../../store/slices/coworkSlice';
 import { setSkills, toggleActiveSkill } from '../../store/slices/skillSlice';
 import { CoworkImageAttachment } from '../../types/cowork';
 import { Skill } from '../../types/skill';
@@ -26,7 +28,7 @@ import FolderSelectorPopover from './FolderSelectorPopover';
 type CoworkAttachment = DraftAttachment;
 
 
-const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg']);
+const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg', '.tiff', '.tif', '.ico', '.avif']);
 
 const isImagePath = (filePath: string): boolean => {
   const dotIndex = filePath.lastIndexOf('.');
@@ -70,6 +72,21 @@ const buildInlinedSkillPrompt = (skill: Skill): string => {
     '',
     skill.prompt,
   ].join('\n');
+};
+
+const SEND_SHORTCUT_OPTIONS = [
+  { value: 'Enter', label: 'Enter', labelMac: 'Enter' },
+  { value: 'Shift+Enter', label: 'Shift+Enter', labelMac: 'Shift+Enter' },
+  { value: 'Ctrl+Enter', label: 'Ctrl+Enter', labelMac: 'Cmd+Enter' },
+  { value: 'Alt+Enter', label: 'Alt+Enter', labelMac: 'Option+Enter' },
+] as const;
+
+const isMacPlatform = navigator.platform.includes('Mac');
+
+const getSendShortcutLabel = (value: string): string => {
+  const option = SEND_SHORTCUT_OPTIONS.find(o => o.value === value);
+  if (!option) return value;
+  return isMacPlatform ? option.labelMac : option.label;
 };
 
 export interface CoworkPromptInputRef {
@@ -117,7 +134,7 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
     } = props;
     const dispatch = useDispatch();
     const draftKey = sessionId || '__home__';
-    const draftPrompt = useSelector((state: RootState) => state.cowork.draftPrompts[draftKey] || '');
+    const draftPrompt = useSelector((state: RootState) => selectDraftPrompts(state)[draftKey] || '');
     const attachments = useSelector((state: RootState) => state.cowork.draftAttachments[draftKey] || []) as CoworkAttachment[];
     const currentAgentId = useSelector((state: RootState) => state.agent.currentAgentId);
     const agents = useSelector((state: RootState) => state.agent.agents);
@@ -134,6 +151,7 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const folderButtonRef = useRef<HTMLButtonElement>(null);
     const dragDepthRef = useRef(0);
+    const warningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 暴露方法给父组件
   React.useImperativeHandle(ref, () => ({
@@ -222,8 +240,9 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
     window.addEventListener('cowork:focus-input', handleFocusInput);
     return () => {
       window.removeEventListener('cowork:focus-input', handleFocusInput);
+      if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
     };
-  }, []);
+  }, [dispatch, draftKey]);
 
   useEffect(() => {
     if (workingDirectory?.trim()) {
@@ -248,6 +267,11 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
   const handleSubmit = useCallback(async () => {
     if (showFolderSelector && !workingDirectory?.trim()) {
       setShowFolderRequiredWarning(true);
+      if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
+      warningTimerRef.current = setTimeout(() => {
+        setShowFolderRequiredWarning(false);
+        warningTimerRef.current = null;
+      }, 3000);
       return;
     }
 
@@ -316,15 +340,43 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
   }, [onManageSkills]);
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Enter to submit, any modifier+Enter (Shift/Ctrl/Cmd/Alt) for new line
     const isComposing = event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229;
-    if (event.key === 'Enter' && !isComposing) {
-      const hasModifier = event.shiftKey || event.ctrlKey || event.metaKey || event.altKey;
-      if (!hasModifier && !isStreaming && !disabled) {
-        event.preventDefault();
-        handleSubmit();
-      } else if (hasModifier && !event.shiftKey) {
-        // Shift+Enter already inserts newline natively; for Ctrl/Cmd/Alt+Enter, insert via execCommand to preserve undo history
+    if (event.key !== 'Enter' || isComposing) return;
+
+    // Use synced state (kept up-to-date via config-updated event) so that
+    // changes made in the Settings panel are reflected immediately without
+    // requiring a configService read at event time.
+    const sendKey = currentSendShortcut;
+
+    let isSendCombo = false;
+    switch (sendKey) {
+      case 'Enter':
+        isSendCombo = !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey;
+        break;
+      case 'Shift+Enter':
+        isSendCombo = event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey;
+        break;
+      case 'Ctrl+Enter':
+        isSendCombo = isMacPlatform
+          ? event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey
+          : event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey;
+        break;
+      case 'Alt+Enter':
+        isSendCombo = event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
+        break;
+      default:
+        // Unknown config value — fall back to bare Enter so the user can always send
+        isSendCombo = !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey;
+        break;
+    }
+
+    if (isSendCombo && !isStreaming && !disabled) {
+      event.preventDefault();
+      handleSubmit();
+    } else {
+      // Any non-send Enter combo inserts a newline.
+      // Shift+Enter inserts newline natively; for other combos use execCommand.
+      if (!event.shiftKey) {
         event.preventDefault();
         document.execCommand('insertText', false, '\n');
       }
@@ -361,32 +413,30 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
 
   const addAttachment = useCallback((filePath: string, imageInfo?: { isImage: boolean; dataUrl?: string }) => {
     if (!filePath) return;
-    const current = attachments;
-    if (current.some((attachment) => attachment.path === filePath)) return;
-    dispatch(setDraftAttachments({
+    dispatch(addDraftAttachment({
       draftKey,
-      attachments: [...current, {
+      attachment: {
         path: filePath,
         name: getFileNameFromPath(filePath),
         isImage: imageInfo?.isImage,
         dataUrl: imageInfo?.dataUrl,
-      }],
+      },
     }));
-  }, [attachments, dispatch, draftKey]);
+  }, [dispatch, draftKey]);
 
   const addImageAttachmentFromDataUrl = useCallback((name: string, dataUrl: string) => {
     // Use the dataUrl as the unique key (no file path for inline images)
     const pseudoPath = `inline:${name}:${Date.now()}`;
-    dispatch(setDraftAttachments({
+    dispatch(addDraftAttachment({
       draftKey,
-      attachments: [...attachments, {
+      attachment: {
         path: pseudoPath,
         name,
         isImage: true,
         dataUrl,
-      }],
+      },
     }));
-  }, [attachments, dispatch, draftKey]);
+  }, [dispatch, draftKey]);
 
   const fileToDataUrl = useCallback((file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -617,32 +667,76 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
     ? `${containerClass} ring-2 ring-primary/50 border-primary/60`
     : containerClass;
 
+  const [showSendShortcutMenu, setShowSendShortcutMenu] = useState(false);
+  const sendShortcutMenuRef = useRef<HTMLDivElement>(null);
+  const sendShortcutBtnRef = useRef<HTMLButtonElement>(null);
+  const [currentSendShortcut, setCurrentSendShortcut] = useState(
+    () => configService.getConfig().shortcuts?.sendMessage ?? 'Enter'
+  );
+
+  // Sync when config is updated elsewhere (e.g. Settings panel)
+  useEffect(() => {
+    const syncFromConfig = () => {
+      const latest = configService.getConfig().shortcuts?.sendMessage ?? 'Enter';
+      setCurrentSendShortcut(latest);
+    };
+    window.addEventListener('config-updated', syncFromConfig);
+    return () => window.removeEventListener('config-updated', syncFromConfig);
+  }, []);
+  useEffect(() => {
+    if (!showSendShortcutMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        sendShortcutMenuRef.current && !sendShortcutMenuRef.current.contains(e.target as Node) &&
+        sendShortcutBtnRef.current && !sendShortcutBtnRef.current.contains(e.target as Node)
+      ) {
+        setShowSendShortcutMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showSendShortcutMenu]);
+
+  const handleSendShortcutChange = async (value: string) => {
+    const config = configService.getConfig();
+    await configService.updateConfig({
+      shortcuts: { ...(config.shortcuts ?? defaultConfig.shortcuts), sendMessage: value } as NonNullable<typeof config.shortcuts>,
+    });
+    setCurrentSendShortcut(value);
+    setShowSendShortcutMenu(false);
+  };
+
+  const sendShortcutDropdown = (
+    <div
+      ref={sendShortcutMenuRef}
+      className="absolute bottom-full mb-1 right-0 z-50 min-w-[160px] rounded-xl border border-border bg-surface shadow-elevated py-1"
+    >
+      {SEND_SHORTCUT_OPTIONS.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          onClick={() => handleSendShortcutChange(option.value)}
+          className="flex items-center justify-between w-full px-3 py-1.5 text-sm text-foreground hover:bg-surface-raised transition-colors"
+        >
+          <span>{isMacPlatform ? option.labelMac : option.label}</span>
+          {currentSendShortcut === option.value && (
+            <CheckIcon className="h-4 w-4 text-primary" />
+          )}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <div className="relative">
       {attachments.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-2">
           {attachments.map((attachment) => (
-              <div
-                key={attachment.path}
-                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1 text-xs text-foreground max-w-full"
-                title={attachment.path}
-              >
-                {attachment.isImage ? (
-                  <PhotoIcon className="h-3.5 w-3.5 flex-shrink-0 text-blue-500" />
-                ) : (
-                  <PaperClipIcon className="h-3.5 w-3.5 flex-shrink-0" />
-                )}
-                <span className="truncate max-w-[180px]">{attachment.name}</span>
-                <button
-                  type="button"
-                  onClick={() => handleRemoveAttachment(attachment.path)}
-                  className="ml-0.5 rounded-full p-0.5 hover:bg-surface-raised"
-                  aria-label={i18nService.t('coworkAttachmentRemove')}
-                  title={i18nService.t('coworkAttachmentRemove')}
-                >
-                  <XMarkIcon className="h-3 w-3" />
-                </button>
-              </div>
+            <AttachmentCard
+              key={attachment.path}
+              attachment={attachment}
+              onRemove={handleRemoveAttachment}
+            />
           ))}
         </div>
       )}
@@ -691,17 +785,16 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
               <div className="flex items-center gap-2 relative">
                 {showFolderSelector && (
                   <>
-                    <Tooltip
-                      content={truncatePath(workingDirectory, 120)}
-                      disabled={showFolderMenu || !workingDirectory}
-                      maxWidth="min(400px, 90vw)"
-                    >
                       <div className="flex items-center">
                         <button
                           ref={folderButtonRef as React.RefObject<HTMLButtonElement>}
                           type="button"
                           onClick={() => setShowFolderMenu(!showFolderMenu)}
-                          className="flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-lg text-sm text-secondary hover:bg-surface-raised hover:text-foreground transition-colors"
+                          className={`flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-lg text-sm transition-colors ${
+                            showFolderRequiredWarning
+                              ? 'ring-1 ring-warning text-warning animate-shake'
+                              : 'text-secondary hover:bg-surface-raised hover:text-foreground'
+                          }`}
                         >
                           <FolderIcon className="h-4 w-4 flex-shrink-0" />
                           <span className="max-w-[150px] truncate text-xs">
@@ -722,13 +815,17 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
                           )}
                         </button>
                       </div>
-                    </Tooltip>
                     <FolderSelectorPopover
                       isOpen={showFolderMenu}
                       onClose={() => setShowFolderMenu(false)}
                       onSelectFolder={handleFolderSelect}
                       anchorRef={folderButtonRef as React.RefObject<HTMLElement>}
                     />
+                    {showFolderRequiredWarning && (
+                      <div className="absolute left-0 top-full mt-1 px-2 py-1 rounded-md bg-surface-raised text-warning text-xs whitespace-nowrap animate-fade-in-up shadow-subtle z-10">
+                        {i18nService.t('coworkSelectFolderFirst')}
+                      </div>
+                    )}
                   </>
                 )}
                 {showModelSelector && !remoteManaged && (
@@ -783,15 +880,30 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
                     <StopIcon className="h-5 w-5" />
                   </button>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={handleSubmit}
-                    disabled={!canSubmit}
-                    className="p-2 rounded-xl bg-primary hover:bg-primary-hover text-white transition-all shadow-subtle hover:shadow-card active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                    aria-label="Send"
-                  >
-                    <PaperAirplaneIcon className="h-5 w-5" />
-                  </button>
+                  <div className="relative">
+                    <div className={`flex items-stretch rounded-xl shadow-subtle hover:shadow-card ${!canSubmit ? 'opacity-50' : ''}`}>
+                      <button
+                        type="button"
+                        onClick={handleSubmit}
+                        disabled={!canSubmit}
+                        className="p-2 rounded-l-xl bg-primary hover:bg-primary-hover text-white transition-all active:scale-95 disabled:cursor-not-allowed"
+                        aria-label="Send"
+                        title={currentSendShortcut !== 'Enter' ? getSendShortcutLabel(currentSendShortcut) : undefined}
+                      >
+                        <PaperAirplaneIcon className="h-5 w-5" />
+                      </button>
+                      <button
+                        ref={sendShortcutBtnRef}
+                        type="button"
+                        onClick={() => setShowSendShortcutMenu(!showSendShortcutMenu)}
+                        className="px-1 flex items-center rounded-r-xl bg-primary hover:bg-primary-hover text-white transition-all active:scale-95 border-l border-white/20"
+                        aria-label="Change send shortcut"
+                      >
+                        <ChevronDownIcon className="h-3 w-3" />
+                      </button>
+                    </div>
+                    {showSendShortcutMenu && sendShortcutDropdown}
+                  </div>
                 )}
               </div>
             </div>
@@ -835,24 +947,34 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
                 <StopIcon className="h-4 w-4" />
               </button>
             ) : (
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={!canSubmit}
-                className="flex-shrink-0 p-2 rounded-lg bg-primary hover:bg-primary-hover text-white transition-all shadow-subtle hover:shadow-card active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                aria-label="Send"
-              >
-                <PaperAirplaneIcon className="h-4 w-4" />
-              </button>
+              <div className="relative flex-shrink-0">
+                <div className={`flex items-stretch rounded-lg shadow-subtle hover:shadow-card ${!canSubmit ? 'opacity-50' : ''}`}>
+                  <button
+                    type="button"
+                    onClick={handleSubmit}
+                    disabled={!canSubmit}
+                    className="p-2 rounded-l-lg bg-primary hover:bg-primary-hover text-white transition-all active:scale-95 disabled:cursor-not-allowed"
+                    aria-label="Send"
+                    title={currentSendShortcut !== 'Enter' ? getSendShortcutLabel(currentSendShortcut) : undefined}
+                  >
+                    <PaperAirplaneIcon className="h-4 w-4" />
+                  </button>
+                  <button
+                    ref={sendShortcutBtnRef}
+                    type="button"
+                    onClick={() => setShowSendShortcutMenu(!showSendShortcutMenu)}
+                    className="px-1 flex items-center rounded-r-lg bg-primary hover:bg-primary-hover text-white transition-all active:scale-95 border-l border-white/20"
+                    aria-label="Change send shortcut"
+                  >
+                    <ChevronDownIcon className="h-3 w-3" />
+                  </button>
+                </div>
+                {showSendShortcutMenu && sendShortcutDropdown}
+              </div>
             )}
           </>
         )}
       </div>
-      {showFolderRequiredWarning && (
-        <div className="mt-2 text-xs text-red-500 dark:text-red-400">
-          {i18nService.t('coworkSelectFolderFirst')}
-        </div>
-      )}
     </div>
   );
   }

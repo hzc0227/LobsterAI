@@ -663,8 +663,11 @@ const initStore = async (): Promise<SqliteStore> => {
     if (!app.isReady()) {
       throw new Error('Store accessed before app is ready.');
     }
+    // better-sqlite3 opens the database synchronously, so Promise.resolve() resolves
+    // immediately. The timeout acts as a safety net for future async changes or
+    // unexpected OS-level blocking (e.g., file lock on startup).
     storeInitPromise = Promise.race([
-      SqliteStore.create(app.getPath('userData')),
+      Promise.resolve(SqliteStore.create(app.getPath('userData'))),
       new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('Store initialization timed out after 15s')), 15_000)
       ),
@@ -830,7 +833,7 @@ const ensureOpenClawRunningForCowork = async () => {
 const getCoworkStore = () => {
   if (!coworkStore) {
     const sqliteStore = getStore();
-    coworkStore = new CoworkStore(sqliteStore.getDatabase(), sqliteStore.getSaveFunction());
+    coworkStore = new CoworkStore(sqliteStore.getDatabase());
     const cleaned = coworkStore.autoDeleteNonPersonalMemories();
     if (cleaned > 0) {
       console.info(`[cowork-memory] Auto-deleted ${cleaned} non-personal/procedural memories`);
@@ -1237,7 +1240,7 @@ const getSkillManager = () => {
 const getMcpStore = () => {
   if (!mcpStore) {
     const sqliteStore = getStore();
-    mcpStore = new McpStore(sqliteStore.getDatabase(), sqliteStore.getSaveFunction());
+    mcpStore = new McpStore(sqliteStore.getDatabase());
   }
   return mcpStore;
 };
@@ -1368,6 +1371,18 @@ const stopMcpBridge = async (): Promise<void> => {
  */
 let mcpBridgeRefreshPromise: Promise<{ tools: number; error?: string }> | null = null;
 
+const broadcastMcpBridgeSync = (channel: string, data?: Record<string, unknown>): void => {
+  const windows = BrowserWindow.getAllWindows();
+  windows.forEach((win) => {
+    if (win.isDestroyed()) return;
+    try {
+      win.webContents.send(channel, data ?? {});
+    } catch (error) {
+      console.error(`[McpBridge] Failed to broadcast ${channel}:`, error);
+    }
+  });
+};
+
 const refreshMcpBridge = (): Promise<{ tools: number; error?: string }> => {
   if (mcpBridgeRefreshPromise) {
     return mcpBridgeRefreshPromise;
@@ -1375,6 +1390,7 @@ const refreshMcpBridge = (): Promise<{ tools: number; error?: string }> => {
   mcpBridgeRefreshPromise = (async () => {
     try {
       console.log('[McpBridge] refreshing after config change...');
+      broadcastMcpBridgeSync('mcp:bridge:syncStart');
 
       // 1. Stop existing MCP servers (but keep HTTP callback server alive — port stays the same)
       if (mcpServerManager) {
@@ -1403,7 +1419,14 @@ const refreshMcpBridge = (): Promise<{ tools: number; error?: string }> => {
       console.error('[McpBridge] refresh error:', msg);
       return { tools: 0, error: msg };
     }
-  })().finally(() => {
+  })().then((result) => {
+    broadcastMcpBridgeSync('mcp:bridge:syncDone', { tools: result.tools, error: result.error });
+    return result;
+  }).catch((err) => {
+    const error = err instanceof Error ? err.message : String(err);
+    broadcastMcpBridgeSync('mcp:bridge:syncDone', { tools: 0, error });
+    return { tools: 0, error };
+  }).finally(() => {
     mcpBridgeRefreshPromise = null;
   });
   return mcpBridgeRefreshPromise;
@@ -1419,7 +1442,6 @@ const getIMGatewayManager = () => {
 
     imGatewayManager = new IMGatewayManager(
       sqliteStore.getDatabase(),
-      sqliteStore.getSaveFunction(),
       {
         coworkRuntime: runtime,
         coworkStore: store,
@@ -2596,18 +2618,22 @@ if (!gotTheLock) {
         imageAttachments: options.imageAttachments,
         agentId: options.agentId,
       }).catch(error => {
-        console.error('Cowork session error:', error);
-        // The engine router already emits an 'error' event (handled at line ~990)
-        // which sends cowork:stream:error to the renderer. Only send here if the
-        // session hasn't been marked as error yet, to avoid duplicate messages.
-        const existing = coworkStoreInstance.getSession(session.id);
-        if (existing?.status === 'error') return;
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        const windows = BrowserWindow.getAllWindows();
-        windows.forEach((win) => {
-          if (win.isDestroyed()) return;
-          win.webContents.send('cowork:stream:error', { sessionId: session.id, error: errorMessage });
-        });
+        console.error('[Cowork] session error:', error);
+        try {
+          // The engine router already emits an 'error' event (handled at line ~990)
+          // which sends cowork:stream:error to the renderer. Only send here if the
+          // session hasn't been marked as error yet, to avoid duplicate messages.
+          const existing = coworkStoreInstance.getSession(session.id);
+          if (existing?.status === 'error') return;
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          const windows = BrowserWindow.getAllWindows();
+          windows.forEach((win) => {
+            if (win.isDestroyed()) return;
+            win.webContents.send('cowork:stream:error', { sessionId: session.id, error: errorMessage });
+          });
+        } catch (handlerError) {
+          console.error('[Cowork] failed to send error notification to renderer:', handlerError);
+        }
       });
 
       const sessionWithMessages = coworkStoreInstance.getSession(session.id) || {
@@ -2649,18 +2675,22 @@ if (!gotTheLock) {
         skillIds: options.activeSkillIds,
         imageAttachments: options.imageAttachments,
       }).catch(error => {
-        console.error('Cowork continue error:', error);
-        // The engine router already emits an 'error' event (handled at line ~990)
-        // which sends cowork:stream:error to the renderer. Only send here if the
-        // session hasn't been marked as error yet, to avoid duplicate messages.
-        const existing = getCoworkStore().getSession(options.sessionId);
-        if (existing?.status === 'error') return;
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        const windows = BrowserWindow.getAllWindows();
-        windows.forEach((win) => {
-          if (win.isDestroyed()) return;
-          win.webContents.send('cowork:stream:error', { sessionId: options.sessionId, error: errorMessage });
-        });
+        console.error('[Cowork] continue error:', error);
+        try {
+          // The engine router already emits an 'error' event (handled at line ~990)
+          // which sends cowork:stream:error to the renderer. Only send here if the
+          // session hasn't been marked as error yet, to avoid duplicate messages.
+          const existing = getCoworkStore().getSession(options.sessionId);
+          if (existing?.status === 'error') return;
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          const windows = BrowserWindow.getAllWindows();
+          windows.forEach((win) => {
+            if (win.isDestroyed()) return;
+            win.webContents.send('cowork:stream:error', { sessionId: options.sessionId, error: errorMessage });
+          });
+        } catch (handlerError) {
+          console.error('[Cowork] failed to send error notification to renderer:', handlerError);
+        }
       });
 
       const session = getCoworkStore().getSession(options.sessionId);
@@ -4022,6 +4052,10 @@ if (!gotTheLock) {
     '.webp': 'image/webp',
     '.bmp': 'image/bmp',
     '.svg': 'image/svg+xml',
+    '.tiff': 'image/tiff',
+    '.tif': 'image/tiff',
+    '.ico': 'image/x-icon',
+    '.avif': 'image/avif',
   };
   ipcMain.handle(
     'dialog:readFileAsDataUrl',
@@ -4682,6 +4716,13 @@ if (!gotTheLock) {
       getCronJobService().stopPolling();
     } catch {
       // CronJobService may not have been initialized — safe to ignore.
+    }
+
+    // Close the SQLite database to flush the WAL and release the file lock.
+    try {
+      getStore().close();
+    } catch {
+      // Store may not have been initialized — safe to ignore.
     }
   };
 

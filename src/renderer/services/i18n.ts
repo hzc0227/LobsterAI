@@ -10,6 +10,7 @@ const translations: Record<LanguageType, Record<string, string>> = {
     save: '保存',
     cancel: '取消',
     saving: '保存中...',
+    delete: '删除',
     create: '创建',
     clear: '清除',
     show: '显示',
@@ -175,6 +176,8 @@ const translations: Record<LanguageType, Record<string, string>> = {
     newChat: '新建任务',
     search: '搜索任务',
     openSettings: '打开设置',
+    sendMessageShortcut: '发送消息',
+    shortcutConflict: '快捷键 "{0}" 已被 "{1}" 使用',
     close: '关闭',
     loginNotAvailable: '登录功能暂未开放',
     collapse: '收起',
@@ -201,11 +204,7 @@ const translations: Record<LanguageType, Record<string, string>> = {
     authLearnMore: '了解更多',
     authValueAddedServices: '增值服务',
     authZeroCredits: '0积分',
-    planFree: '免费',
-    planStandard: '标准',
-    planAdvanced: '进阶',
-    planPro: '专业',
-    
+
     // 错误信息
     failedToLoadSettings: '加载设置失败',
     failedToSaveSettings: '保存设置失败',
@@ -224,7 +223,6 @@ const translations: Record<LanguageType, Record<string, string>> = {
     unpinConversation: '取消置顶',
     noProject: '无项目',
     noProjects: '暂无项目',
-    delete: '删除',
     confirmDelete: '确认删除',
     confirmDeleteMessage: '确定要删除这个对话吗？此操作不可撤销。',
     searchChats: '搜索聊天',
@@ -510,12 +508,20 @@ const translations: Record<LanguageType, Record<string, string>> = {
     agentIMBound: '已绑定',
     agentIMBoundToOther: '→ {agent}',
     agentIMBindHint: '选择此 Agent 响应的 IM 渠道',
+    agentCreateFailed: '创建 Agent 失败',
+    agentSaveFailed: '保存 Agent 设置失败',
+    agentDeleteConfirmTitle: '确认删除 Agent',
+    agentDeleteConfirmMessage: '确定要删除 Agent「{name}」吗？此操作不可撤销。',
+    agentUnsavedTitle: '未保存的更改',
+    agentUnsavedMessage: '有未保存的更改，确定要放弃吗？',
+    discard: '放弃',
     noPresetsAvailable: '所有预设已添加',
     creating: '创建中...',
 
     coworkNewSession: '新会话',
     coworkContinuePlaceholder: '继续对话...',
     coworkRemoteManagedPlaceholder: '该会话由 IM 通道创建，请在对应的 IM 平台操作',
+    aiGeneratedDisclaimer: '内容由 AI 生成，仅供参考',
     updateAvailablePill: '有新版本',
     updateAvailableTitle: '检测到新版本',
     updateAvailableMessage: '检测到新版本，请前往官网下载并覆盖安装。',
@@ -616,7 +622,7 @@ const translations: Record<LanguageType, Record<string, string>> = {
     clawhubImportDescription: '粘贴 clawhub.ai 的技能页面链接，将自动安装对应技能。',
     clawhubImportUrlLabel: 'ClawHub URL',
     clawhubSkillPlaceholder: '例如：https://clawhub.ai/skills/owner/skill-name',
-    clawhubImportExamples: '示例：https://clawhub.ai/skills/anthropic/web-search',
+    clawhubImportExamples: '示例：https://clawhub.ai/skills/owner/skill-name',
     importSourceMismatchClawhub: '请输入 clawhub.ai 的链接，或切换到 GitHub 标签页导入。',
     importSourceMismatchGithub: '请输入 GitHub 链接或 owner/repo 格式，或切换到 ClawHub 标签页导入。',
     importSkill: '导入',
@@ -779,6 +785,7 @@ const translations: Record<LanguageType, Record<string, string>> = {
     mcpInstallFromUrlPlaceholder: '输入 npm 包名或 URL',
     mcpInstallFromUrlHint: '支持 npm 包名（如 @modelcontextprotocol/server-filesystem）、npx 命令或 HTTP/HTTPS URL',
     mcpRequiredConfig: '必填配置',
+    mcpEnvRequired: '此字段为必填项',
     mcpOptionalConfig: '可选配置',
     mcpViewOnGithub: '在 GitHub 上查看',
     mcpNoInstalledServers: '尚未安装任何 MCP 服务',
@@ -922,6 +929,13 @@ const translations: Record<LanguageType, Record<string, string>> = {
     nimQChatServerIdsPlaceholder: '留空自动发现所有已加入的服务器',
     nimQChatServerIdsHint: '指定要订阅的服务器 ID，多个用逗号分隔。留空则自动订阅所有已加入的服务器。',
     neteaseBeeChanClientIdPlaceholder: '小蜜蜂助理Client ID',
+
+    // IM 设置页面 - POPO 配置
+    imPopoAesKeyLengthWarning: 'AES Key 需要为 32 个字符',
+    imPopoAesKeyLengthCurrent: '当前',
+    imPopoWebhookPlaceholder: '外部域名（可选，不填则自动检测本机 IP）',
+    imPopoUserIdPlaceholder: '输入用户 ID 后回车添加',
+    imPopoGroupIdPlaceholder: '输入群组 ID 后回车添加',
 
     // IM 设置页面国际化
     imAdvancedSettings: '高级设置',
@@ -1285,12 +1299,19 @@ const translations: Record<LanguageType, Record<string, string>> = {
     copy: '复制',
 
     'settings.enterprise.managed': '由企业统一管理',
+
+    // TaskForm unsaved changes confirmation
+    taskFormUnsavedChanges: '有未保存的修改',
+    taskFormLeaveConfirm: '离开后修改将丢失，确认离开吗？',
+    taskFormLeave: '离开',
+    taskFormStay: '继续编辑',
   },
   en: {
     // Common
     save: 'Save',
     cancel: 'Cancel',
     saving: 'Saving...',
+    delete: 'Delete',
     create: 'Create',
     clear: 'Clear',
     show: 'Show',
@@ -1456,6 +1477,8 @@ const translations: Record<LanguageType, Record<string, string>> = {
     newChat: 'New Task',
     search: 'Search Tasks',
     openSettings: 'Open Settings',
+    sendMessageShortcut: 'Send Message',
+    shortcutConflict: 'Shortcut "{0}" is already used by "{1}"',
     close: 'Close',
     loginNotAvailable: 'Login is not available yet',
     collapse: 'Collapse',
@@ -1482,10 +1505,7 @@ const translations: Record<LanguageType, Record<string, string>> = {
     authLearnMore: 'Learn More',
     authValueAddedServices: 'Premium Services',
     authZeroCredits: '0 credits',
-    planFree: 'Free',
-    planAdvanced: 'Advanced',
-    planPro: 'Pro',
-    
+
     // Error Messages
     failedToLoadSettings: 'Failed to load settings',
     failedToSaveSettings: 'Failed to save settings',
@@ -1504,7 +1524,6 @@ const translations: Record<LanguageType, Record<string, string>> = {
     unpinConversation: 'Unpin chat',
     noProject: 'No project',
     noProjects: 'No projects',
-    delete: 'Delete',
     confirmDelete: 'Confirm Delete',
     confirmDeleteMessage: 'Are you sure you want to delete this conversation? This action cannot be undone.',
     searchChats: 'Search Chats',
@@ -1790,12 +1809,20 @@ const translations: Record<LanguageType, Record<string, string>> = {
     agentIMBound: 'Bound',
     agentIMBoundToOther: '→ {agent}',
     agentIMBindHint: 'Select IM channels this Agent responds to',
+    agentCreateFailed: 'Failed to create Agent',
+    agentSaveFailed: 'Failed to save Agent settings',
+    agentDeleteConfirmTitle: 'Confirm Delete Agent',
+    agentDeleteConfirmMessage: 'Are you sure you want to delete Agent "{name}"? This action cannot be undone.',
+    agentUnsavedTitle: 'Unsaved Changes',
+    agentUnsavedMessage: 'You have unsaved changes. Are you sure you want to discard them?',
+    discard: 'Discard',
     noPresetsAvailable: 'All presets have been added',
     creating: 'Creating...',
 
     coworkNewSession: 'New Session',
     coworkContinuePlaceholder: 'Continue the conversation...',
     coworkRemoteManagedPlaceholder: 'This session was created via IM. Please use the corresponding IM platform.',
+    aiGeneratedDisclaimer: 'Content generated by AI, for reference only.',
     updateAvailablePill: 'New update',
     updateAvailableTitle: 'New version available',
     updateAvailableMessage: 'A new version is available. Please download it from the official website and install over the current version.',
@@ -1896,7 +1923,7 @@ const translations: Record<LanguageType, Record<string, string>> = {
     clawhubImportDescription: 'Paste a clawhub.ai skill page URL to automatically install the skill.',
     clawhubImportUrlLabel: 'ClawHub URL',
     clawhubSkillPlaceholder: 'e.g. https://clawhub.ai/skills/owner/skill-name',
-    clawhubImportExamples: 'Example: https://clawhub.ai/skills/anthropic/web-search',
+    clawhubImportExamples: 'Example: https://clawhub.ai/skills/owner/skill-name',
     importSourceMismatchClawhub: 'Please enter a clawhub.ai URL, or switch to the GitHub tab.',
     importSourceMismatchGithub: 'Please enter a GitHub URL or owner/repo, or switch to the ClawHub tab.',
     importSkill: 'Import',
@@ -2059,6 +2086,7 @@ const translations: Record<LanguageType, Record<string, string>> = {
     mcpInstallFromUrlPlaceholder: 'Enter npm package name or URL',
     mcpInstallFromUrlHint: 'Supports npm package names (e.g. @modelcontextprotocol/server-filesystem), npx commands, or HTTP/HTTPS URLs',
     mcpRequiredConfig: 'Required Configuration',
+    mcpEnvRequired: 'This field is required',
     mcpOptionalConfig: 'Optional Configuration',
     mcpViewOnGithub: 'View on GitHub',
     mcpNoInstalledServers: 'No MCP servers installed yet',
@@ -2201,6 +2229,13 @@ const translations: Record<LanguageType, Record<string, string>> = {
     nimQChatServerIdsPlaceholder: 'Leave empty to auto-discover all joined servers',
     nimQChatServerIdsHint: 'Specify server IDs to subscribe, separated by commas. Leave empty to auto-subscribe all joined servers.',
     neteaseBeeChanClientIdPlaceholder: 'Netease Bee IM Client ID',
+
+    // IM settings page - POPO config
+    imPopoAesKeyLengthWarning: 'AES Key must be 32 characters',
+    imPopoAesKeyLengthCurrent: 'current',
+    imPopoWebhookPlaceholder: 'External domain (optional, auto-detects local IP)',
+    imPopoUserIdPlaceholder: 'Enter user ID and press Enter',
+    imPopoGroupIdPlaceholder: 'Enter group ID and press Enter',
 
     // IM settings page i18n
     imAdvancedSettings: 'Advanced Settings',
@@ -2564,6 +2599,12 @@ const translations: Record<LanguageType, Record<string, string>> = {
     copy: 'Copy',
 
     'settings.enterprise.managed': 'Managed by enterprise',
+
+    // TaskForm unsaved changes confirmation
+    taskFormUnsavedChanges: 'Unsaved Changes',
+    taskFormLeaveConfirm: 'Your changes will be lost if you leave. Are you sure you want to leave?',
+    taskFormLeave: 'Leave',
+    taskFormStay: 'Keep Editing',
   }
 };
 

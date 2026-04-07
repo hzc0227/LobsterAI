@@ -18,7 +18,7 @@ import PencilIcon from './icons/PencilIcon';
 import BrainIcon from './icons/BrainIcon';
 import { useDispatch, useSelector } from 'react-redux';
 import { setAvailableModels } from '../store/slices/modelSlice';
-import { RootState } from '../store';
+import { selectCoworkConfig } from '../store/selectors/coworkSelectors';
 import ThemedSelect from './ui/ThemedSelect';
 import type {
   CoworkAgentEngine,
@@ -457,6 +457,15 @@ const formatShortcutFromEvent = (e: React.KeyboardEvent): string | null => {
   return parts.join('+');
 };
 
+const SEND_SHORTCUT_OPTIONS = [
+  { value: 'Enter', label: 'Enter', labelMac: 'Enter' },
+  { value: 'Shift+Enter', label: 'Shift+Enter', labelMac: 'Shift+Enter' },
+  { value: 'Ctrl+Enter', label: 'Ctrl+Enter', labelMac: 'Cmd+Enter' },
+  { value: 'Alt+Enter', label: 'Alt+Enter', labelMac: 'Option+Enter' },
+] as const;
+
+const isMacPlatform = navigator.platform.includes('Mac');
+
 const ShortcutRecorder: React.FC<{ value: string; onChange: (v: string) => void }> = ({ value, onChange }) => {
   const [recording, setRecording] = useState(false);
   const divRef = useRef<HTMLDivElement>(null);
@@ -496,6 +505,65 @@ const ShortcutRecorder: React.FC<{ value: string; onChange: (v: string) => void 
         }`}
     >
       {value || i18nService.t('shortcutNotSet')}
+    </div>
+  );
+};
+
+const SendShortcutSelect: React.FC<{ value: string; onChange: (v: string) => void }> = ({ value, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
+
+  const currentLabel = (() => {
+    const opt = SEND_SHORTCUT_OPTIONS.find(o => o.value === value);
+    if (!opt) return value;
+    return isMacPlatform ? opt.labelMac : opt.label;
+  })();
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div
+        onClick={() => setOpen(!open)}
+        className={`w-36 rounded-xl border px-3 py-1.5 text-sm cursor-pointer select-none text-center outline-none transition-colors
+          dark:bg-claude-darkSurfaceInset bg-claude-surfaceInset dark:text-claude-darkText text-claude-text
+          ${open
+            ? 'border-claude-accent ring-1 ring-claude-accent/30'
+            : 'dark:border-claude-darkBorder border-claude-border hover:border-claude-accent/50'
+          }`}
+      >
+        {currentLabel}
+      </div>
+      {open && (
+        <div className="absolute right-0 mt-1 z-50 min-w-[160px] rounded-xl border dark:border-claude-darkBorder border-claude-border dark:bg-claude-darkSurfaceInset bg-claude-surfaceInset shadow-elevated py-1">
+          {SEND_SHORTCUT_OPTIONS.map((option) => {
+            const label = isMacPlatform ? option.labelMac : option.label;
+            const isActive = value === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => { onChange(option.value); setOpen(false); }}
+                className={`flex items-center justify-between w-full px-3 py-1.5 text-sm transition-colors
+                  ${isActive
+                    ? 'dark:text-claude-accent text-claude-accent font-medium'
+                    : 'dark:text-claude-darkText text-claude-text'
+                  } hover:bg-claude-accent/10`}
+              >
+                <span>{label}</span>
+                {isActive && <span className="text-claude-accent">✓</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };
@@ -547,11 +615,6 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, notice
   const [providers, setProviders] = useState<ProvidersConfig>(() => getDefaultProviders());
 
 
-  // Qwen OAuth state
-  const [qwenOAuthProgress, setQwenOAuthProgress] = useState<string | null>(null);
-  const [qwenOAuthLoading, setQwenOAuthLoading] = useState(false);
-  const [qwenAuthTab, setQwenAuthTab] = useState<'apikey' | 'oauth'>('oauth');
-
   // authType defaults to undefined on first open, which should behave as OAuth mode
   const minimaxIsOAuthMode = providers.minimax.authType !== 'apikey';
   const isBaseUrlLocked = (activeProvider === 'zhipu' && providers.zhipu.codingPlanEnabled) || (activeProvider === 'qwen' && providers.qwen.codingPlanEnabled) || (activeProvider === 'volcengine' && providers.volcengine.codingPlanEnabled) || (activeProvider === 'moonshot' && providers.moonshot.codingPlanEnabled) || (activeProvider === 'minimax' && minimaxIsOAuthMode);
@@ -567,6 +630,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, notice
     newChat: 'Ctrl+N',
     search: 'Ctrl+F',
     settings: 'Ctrl+,',
+    sendMessage: defaultConfig.shortcuts!.sendMessage,
   });
 
   // GitHub Copilot device code auth state
@@ -693,7 +757,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, notice
     }
   }, [isExportingLogs]);
 
-  const coworkConfig = useSelector((state: RootState) => state.cowork.config);
+  const coworkConfig = useSelector(selectCoworkConfig);
 
   const [coworkAgentEngine, setCoworkAgentEngine] = useState<CoworkAgentEngine>(coworkConfig.agentEngine || 'openclaw');
   const [coworkMemoryEnabled, setCoworkMemoryEnabled] = useState<boolean>(coworkConfig.memoryEnabled ?? true);
@@ -1161,61 +1225,6 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, notice
     });
   };
 
-  // Handle Qwen OAuth login
-  const handleQwenOAuthLogin = async () => {
-    if (qwenOAuthLoading) return;
-    
-    setQwenOAuthLoading(true);
-    setQwenOAuthProgress(null);
-    setError(null);
-
-    // Set up progress listener
-    const cleanupProgress = window.electron.qwen.onOAuthProgress((message: string) => {
-      setQwenOAuthProgress(message);
-    });
-
-    try {
-      const result = await window.electron.qwen.oauthLogin();
-      
-      if (result.success && result.data) {
-        // Update providers config with OAuth credentials
-        setProviders(prev => ({
-          ...prev,
-          qwen: {
-            ...prev.qwen,
-            oauthCredentials: result.data,
-            // Don't clear API key - let both coexist
-            // Don't change enabled state - keep current setting
-            // Store OAuth base URL separately so it doesn't pollute API Key's baseUrl
-            oauthBaseUrl: (prev.qwen as any).oauthBaseUrl || result?.data?.resourceUrl || 'https://portal.qwen.ai/v1',
-          },
-        }));
-        setQwenOAuthProgress(i18nService.t('qwenOAuthSuccess'));
-      } else {
-        setError(result.error || i18nService.t('qwenOAuthFailed'));
-      }
-    } catch (error) {
-      console.error('Qwen OAuth error:', error);
-      setError(error instanceof Error ? error.message : i18nService.t('qwenOAuthFailed'));
-    } finally {
-      // Clean up
-      cleanupProgress();
-      setQwenOAuthLoading(false);
-      setTimeout(() => setQwenOAuthProgress(null), 3000);
-    }
-  };
-
-  // Handle clearing Qwen OAuth credentials
-  const handleQwenOAuthLogout = () => {
-    setProviders(prev => ({
-      ...prev,
-      qwen: {
-        ...prev.qwen,
-        oauthCredentials: undefined,
-        // Don't change API key or enabled state - keep them as is
-      },
-    }));
-  };
   const handleMiniMaxDeviceLogin = async (region: MiniMaxRegion) => {
     minimaxOAuthCancelRef.current = false;
     setMinimaxOAuthPhase({ kind: 'requesting_code' });
@@ -1790,8 +1799,27 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, notice
     setActiveTab(tab);
   };
 
+  // Mapping from shortcut key to i18n label key for conflict messages
+  const shortcutLabelMap: Record<string, string> = {
+    newChat: 'newChat',
+    search: 'search',
+    settings: 'openSettings',
+    sendMessage: 'sendMessageShortcut',
+  };
+
   // 快捷键更新处理
   const handleShortcutChange = (key: keyof typeof shortcuts, value: string) => {
+    // Check for conflicts with other shortcuts
+    const conflictKey = Object.keys(shortcuts).find(
+      k => k !== key && shortcuts[k as keyof typeof shortcuts] === value
+    );
+    if (conflictKey) {
+      const conflictLabel = i18nService.t(shortcutLabelMap[conflictKey] ?? conflictKey);
+      setNoticeMessage(
+        i18nService.t('shortcutConflict').replace('{0}', value).replace('{1}', conflictLabel)
+      );
+      return;
+    }
     setShortcuts(prev => ({
       ...prev,
       [key]: value
@@ -1973,91 +2001,10 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, notice
       
       let normalizedBaseUrl = effectiveBaseUrl.replace(/\/+$/, '');
 
-      // Determine effective API key and OAuth-specific settings
+      // Determine effective API key
       let effectiveApiKey = providerConfig.apiKey;
-      let oauthBaseUrl = null;
-      
-      // For Qwen, check if we should use OAuth (when on OAuth tab and have credentials)
-      if (testingProvider === 'qwen' && qwenAuthTab === 'oauth' && (providerConfig as any).oauthCredentials) {
-        const oauthCreds = (providerConfig as any).oauthCredentials;
-        
-        // Check if token is expired and try to refresh
-        if (Date.now() >= oauthCreds.expires) {
-          if (oauthCreds.refresh) {
-            try {
-              console.log('Token过期，尝试自动刷新...');
-              const refreshResult = await window.electron.qwen.oauthRefresh(oauthCreds.refresh);
-              
-              if (refreshResult.success && refreshResult.data) {
-                // Update the providers config with new token
-                setProviders(prev => ({
-                  ...prev,
-                  qwen: {
-                    ...prev.qwen,
-                    oauthCredentials: refreshResult.data,
-                  },
-                }));
-                
-                // Use the new token for testing
-                effectiveApiKey = refreshResult.data.access;
-                console.log('Token刷新成功，继续测试连接');
-              } else {
-                showTestResultModal({ success: false, message: 'OAuth token已过期且刷新失败，请重新登录' }, testingProvider);
-                setIsTesting(false);
-                return;
-              }
-            } catch (error) {
-              console.error('Token刷新失败:', error);
-              showTestResultModal({ success: false, message: 'OAuth token已过期且刷新失败，请重新登录' }, testingProvider);
-              setIsTesting(false);
-              return;
-            }
-          } else {
-            showTestResultModal({ success: false, message: 'OAuth token已过期，请重新登录' }, testingProvider);
-            setIsTesting(false);
-            return;
-          }
-        }
-        
-        effectiveApiKey = oauthCreds.access;
-        
-        // Debug: Log OAuth test info
-        console.log('OAuth测试连接信息:', {
-          accessToken: effectiveApiKey?.slice(0, 20) + '...',
-          resourceUrl: oauthCreds.resourceUrl,
-          expires: new Date(oauthCreds.expires).toLocaleString(),
-          isExpired: Date.now() >= oauthCreds.expires
-        });
-        
-        // For OAuth, use the resourceUrl if available and switch to OpenAI format
-        if (oauthCreds.resourceUrl) {
-          // Normalize OAuth base URL similar to normalizeQwenBaseUrl
-          const raw = oauthCreds.resourceUrl.trim();
-          const withProtocol = raw.startsWith("http") ? raw : `https://${raw}`;
-          oauthBaseUrl = withProtocol.endsWith("/v1") ? withProtocol : `${withProtocol.replace(/\/+$/, "")}/v1`;
-          effectiveApiFormat = 'openai'; // OAuth endpoints use OpenAI format
-          effectiveBaseUrl = oauthBaseUrl; // Use OAuth base URL
-          
-          console.log('OAuth URL构建过程:', {
-            原始URL: oauthCreds.resourceUrl,
-            添加协议后: withProtocol,
-            最终URL: oauthBaseUrl,
-            使用的effectiveBaseUrl: effectiveBaseUrl
-          });
-          
-          // Re-compute normalizedBaseUrl after OAuth override
-          normalizedBaseUrl = effectiveBaseUrl.replace(/\/+$/, '');
-          
-          // Map model ID for OAuth compatibility
-          if (firstModel) {
-            if (firstModel.supportsImage) {
-              firstModel.id = 'vision-model';
-            } else {
-              firstModel.id = 'coder-model';
-            }
-          }
-        }
-      } else if (testingProvider === 'qwen' && qwenAuthTab === 'apikey') {
+
+      if (testingProvider === 'qwen') {
         // Use regular API Key mode
         effectiveApiKey = providerConfig.apiKey;
         // Ensure model ID is not an OAuth-mapped name (vision-model/coder-model)
@@ -3380,150 +3327,53 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, notice
                     </div>
                   )}
 
-                  {/* Special Qwen section with both API Key and OAuth support */}
+                  {/* Qwen API Key section */}
                   {activeProvider === 'qwen' && (
-                    <div className="space-y-4">
-                      {/* Tab switching for authentication methods */}
-                      <div className="flex rounded-xl overflow-hidden border border-border mb-3">
-                        <button
-                          type="button"
-                          onClick={() => setQwenAuthTab('oauth')}
-                          className={`flex-1 py-1.5 text-xs font-medium transition-colors ${
-                            qwenAuthTab === 'oauth'
-                              ? 'bg-primary text-white'
-                              : 'text-secondary hover:bg-surface-raised'
-                          }`}
-                        >
-                          {i18nService.t('qwenOAuthTab')}
-                          {providers.qwen.oauthCredentials && (
-                            <span className="ml-1 inline-block w-1.5 h-1.5 bg-green-500 rounded-full align-middle"></span>
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setQwenAuthTab('apikey');
-                            setQwenOAuthProgress(null);
-                            setQwenOAuthLoading(false);
-                          }}
-                          className={`flex-1 py-1.5 text-xs font-medium transition-colors ${
-                            qwenAuthTab === 'apikey'
-                              ? 'bg-primary text-white'
-                              : 'text-secondary hover:bg-surface-raised'
-                          }`}
-                        >
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label htmlFor="qwen-apiKey" className="block text-xs font-medium dark:text-claude-darkText text-claude-text">
                           API Key
-                        </button>
+                        </label>
+                        {providerLinks.qwen?.apiKey && (
+                          <button
+                            type="button"
+                            onClick={() => void window.electron.shell.openExternal(providerLinks.qwen!.apiKey!)}
+                            className="text-[11px] text-claude-accent hover:underline transition-colors"
+                          >
+                            {i18nService.t('getApiKey')} →
+                          </button>
+                        )}
                       </div>
-
-                      {/* API Key Tab */}
-                      {qwenAuthTab === 'apikey' && (
-                        <div className="min-h-[68px]">
-                          <div className="flex items-center justify-between mb-1">
-                            <label htmlFor="qwen-apiKey" className="block text-xs font-medium dark:text-claude-darkText text-claude-text">
-                              API Key
-                            </label>
-                            {providerLinks.qwen?.apiKey && (
-                              <button
-                                type="button"
-                                onClick={() => void window.electron.shell.openExternal(providerLinks.qwen!.apiKey!)}
-                                className="text-[11px] text-claude-accent hover:underline transition-colors"
-                              >
-                                {i18nService.t('getApiKey')} →
-                              </button>
-                            )}
-                          </div>
-                          <div className="relative">
-                            <input
-                              type={showApiKey ? 'text' : 'password'}
-                              id="qwen-apiKey"
-                              value={providers.qwen.apiKey}
-                              onChange={(e) => handleProviderConfigChange('qwen', 'apiKey', e.target.value)}
-                              className="block w-full rounded-xl bg-claude-surfaceInset dark:bg-claude-darkSurfaceInset dark:border-claude-darkBorder border-claude-border border focus:border-claude-accent focus:ring-1 focus:ring-claude-accent/30 dark:text-claude-darkText text-claude-text px-3 py-2 pr-16 text-xs"
-                              placeholder={i18nService.t('apiKeyPlaceholder')}
-                            />
-                            <div className="absolute right-2 inset-y-0 flex items-center gap-1">
-                              {providers.qwen.apiKey && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleProviderConfigChange('qwen', 'apiKey', '')}
-                                  className="p-0.5 rounded text-claude-textSecondary dark:text-claude-darkTextSecondary hover:text-claude-accent transition-colors"
-                                  title={i18nService.t('clear') || 'Clear'}
-                                >
-                                  <XCircleIconSolid className="h-4 w-4" />
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => setShowApiKey(!showApiKey)}
-                                className="p-0.5 rounded text-claude-textSecondary dark:text-claude-darkTextSecondary hover:text-claude-accent transition-colors"
-                                title={showApiKey ? (i18nService.t('hide') || 'Hide') : (i18nService.t('show') || 'Show')}
-                              >
-                                {showApiKey ? <EyeIcon className="h-4 w-4" /> : <EyeSlashIcon className="h-4 w-4" />}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* OAuth Tab */}
-                      {qwenAuthTab === 'oauth' && (
-                        <div className="min-h-[68px]">
-                          <label className="block text-xs font-medium dark:text-claude-darkText text-claude-text mb-2">
-                            {i18nService.t('qwenOAuthLoginFree')}
-                          </label>
-                          
-                          {providers.qwen.oauthCredentials ? (
-                            <div className="p-3 rounded-xl bg-green-500/10 border border-green-500/30">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center space-x-2">
-                                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                                  <span className="text-xs text-green-600 dark:text-green-400 font-medium">
-                                    {i18nService.t('qwenOAuthLoggedIn')}
-                                  </span>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={handleQwenOAuthLogout}
-                                  className="px-2 py-1 text-xs text-green-600 dark:text-green-400 hover:text-white hover:bg-green-600 dark:hover:bg-green-500 rounded-md border border-green-500/30 hover:border-green-600 dark:hover:border-green-500 transition-all duration-200 shadow-sm hover:shadow-md"
-                                >
-                                  {i18nService.t('qwenOAuthLogout')}
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="space-y-2">
-                              <button
-                                type="button"
-                                onClick={handleQwenOAuthLogin}
-                                disabled={qwenOAuthLoading}
-                                className="w-full flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-claude-accent hover:bg-claude-accent/80 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-sm transition-colors"
-                              >
-                                {qwenOAuthLoading ? (
-                                  <>
-                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                    <span>{i18nService.t('qwenOAuthLoggingIn')}</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <UserCircleIcon className="w-4 h-4" />
-                                    <span>{i18nService.t('qwenOAuthLogin')}</span>
-                                  </>
-                                )}
-                              </button>
-                              
-                              {qwenOAuthProgress && (
-                                <div className="p-2 rounded-lg bg-claude-accent/10 border border-claude-accent/20">
-                                  <p className="text-xs text-claude-accent dark:text-claude-accent">
-                                    {qwenOAuthProgress}
-                                  </p>
-                                </div>
-                              )}
-                            </div>
+                      <div className="relative">
+                        <input
+                          type={showApiKey ? 'text' : 'password'}
+                          id="qwen-apiKey"
+                          value={providers.qwen.apiKey}
+                          onChange={(e) => handleProviderConfigChange('qwen', 'apiKey', e.target.value)}
+                          className="block w-full rounded-xl bg-claude-surfaceInset dark:bg-claude-darkSurfaceInset dark:border-claude-darkBorder border-claude-border border focus:border-claude-accent focus:ring-1 focus:ring-claude-accent/30 dark:text-claude-darkText text-claude-text px-3 py-2 pr-16 text-xs"
+                          placeholder={i18nService.t('apiKeyPlaceholder')}
+                        />
+                        <div className="absolute right-2 inset-y-0 flex items-center gap-1">
+                          {providers.qwen.apiKey && (
+                            <button
+                              type="button"
+                              onClick={() => handleProviderConfigChange('qwen', 'apiKey', '')}
+                              className="p-0.5 rounded text-claude-textSecondary dark:text-claude-darkTextSecondary hover:text-claude-accent transition-colors"
+                              title={i18nService.t('clear') || 'Clear'}
+                            >
+                              <XCircleIconSolid className="h-4 w-4" />
+                            </button>
                           )}
+                          <button
+                            type="button"
+                            onClick={() => setShowApiKey(!showApiKey)}
+                            className="p-0.5 rounded text-claude-textSecondary dark:text-claude-darkTextSecondary hover:text-claude-accent transition-colors"
+                            title={showApiKey ? (i18nService.t('hide') || 'Hide') : (i18nService.t('show') || 'Show')}
+                          >
+                            {showApiKey ? <EyeIcon className="h-4 w-4" /> : <EyeSlashIcon className="h-4 w-4" />}
+                          </button>
                         </div>
-                      )}
-
+                      </div>
                     </div>
                   )}
                 </div>
@@ -3656,58 +3506,32 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, notice
                     type="text"
                     id={`${activeProvider}-baseUrl`}
                     value={
-                      activeProvider === 'zhipu' && providers.zhipu.codingPlanEnabled
-                        ? (getEffectiveApiFormat('zhipu', providers.zhipu.apiFormat) === 'anthropic'
-                            ? 'https://open.bigmodel.cn/api/anthropic'
-                            : 'https://open.bigmodel.cn/api/coding/paas/v4')
-                        : activeProvider === 'qwen' && qwenAuthTab === 'apikey' && providers.qwen.codingPlanEnabled
-                          ? (getEffectiveApiFormat('qwen', providers.qwen.apiFormat) === 'anthropic'
-                              ? 'https://coding.dashscope.aliyuncs.com/apps/anthropic'
-                              : 'https://coding.dashscope.aliyuncs.com/v1')
-                          : activeProvider === 'qwen' && qwenAuthTab === 'oauth'
-                            ? ((providers.qwen as any).oauthBaseUrl || 'https://portal.qwen.ai/v1')
-                          : activeProvider === 'qwen' && qwenAuthTab === 'apikey'
-                            ? (providers.qwen.baseUrl || getProviderDefaultBaseUrl('qwen', getEffectiveApiFormat('qwen', providers.qwen.apiFormat)) || 'https://dashscope.aliyuncs.com/apps/anthropic')
-                          : activeProvider === 'volcengine' && providers.volcengine.codingPlanEnabled
-                            ? (getEffectiveApiFormat('volcengine', providers.volcengine.apiFormat) === 'anthropic'
-                                ? 'https://ark.cn-beijing.volces.com/api/coding'
-                                : 'https://ark.cn-beijing.volces.com/api/coding/v3')
-                            : activeProvider === 'moonshot' && providers.moonshot.codingPlanEnabled
-                              ? (getEffectiveApiFormat('moonshot', providers.moonshot.apiFormat) === 'anthropic'
-                                  ? 'https://api.kimi.com/coding'
-                                  : 'https://api.kimi.com/coding/v1')
-                              : providers[activeProvider].baseUrl
+                      (() => {
+                        // Coding plan override: delegate to ProviderRegistry (50e20b76)
+                        const fmt = getEffectiveApiFormat(activeProvider, providers[activeProvider].apiFormat);
+                        if (fmt !== 'gemini') {
+                          const cpUrl = (providers[activeProvider] as { codingPlanEnabled?: boolean }).codingPlanEnabled
+                            ? ProviderRegistry.getCodingPlanUrl(activeProvider, fmt)
+                            : undefined;
+                          if (cpUrl) return cpUrl;
+                        }
+                        return providers[activeProvider].baseUrl;
+                      })()
                     }
-                    onChange={(e) => {
-                      if (activeProvider === 'qwen' && qwenAuthTab === 'oauth') {
-                        handleProviderConfigChange(activeProvider, 'oauthBaseUrl', e.target.value);
-                      } else {
-                        handleProviderConfigChange(activeProvider, 'baseUrl', e.target.value);
-                      }
-                    }}
+                    onChange={(e) => handleProviderConfigChange(activeProvider, 'baseUrl', e.target.value)}
                     disabled={isBaseUrlLocked}
                     className={`block w-full rounded-xl bg-claude-surfaceInset dark:bg-claude-darkSurfaceInset dark:border-claude-darkBorder border-claude-border border focus:border-claude-accent focus:ring-1 focus:ring-claude-accent/30 dark:text-claude-darkText text-claude-text px-3 py-2 pr-8 text-xs ${isBaseUrlLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
                     placeholder={
-                      activeProvider === 'qwen' && qwenAuthTab === 'oauth'
-                        ? 'https://portal.qwen.ai/v1'
-                        : activeProvider === 'qwen' && qwenAuthTab === 'apikey'
-                          ? 'https://dashscope.aliyuncs.com/apps/anthropic'
-                          : getProviderDefaultBaseUrl(activeProvider, getEffectiveApiFormat(activeProvider, providers[activeProvider].apiFormat)) || defaultConfig.providers?.[activeProvider]?.baseUrl || i18nService.t('baseUrlPlaceholder')
+                      activeProvider === 'qwen'
+                        ? 'https://dashscope.aliyuncs.com/apps/anthropic'
+                        : getProviderDefaultBaseUrl(activeProvider, getEffectiveApiFormat(activeProvider, providers[activeProvider].apiFormat)) || defaultConfig.providers?.[activeProvider]?.baseUrl || i18nService.t('baseUrlPlaceholder')
                     }
                   />
-                  {((activeProvider === 'qwen' && qwenAuthTab === 'oauth' && (providers.qwen as any).oauthBaseUrl) || 
-                    (!(activeProvider === 'qwen' && qwenAuthTab === 'oauth') && providers[activeProvider].baseUrl)) && 
-                   !isBaseUrlLocked && (
+                  {providers[activeProvider].baseUrl && !isBaseUrlLocked && (
                     <div className="absolute right-2 inset-y-0 flex items-center">
                       <button
                         type="button"
-                        onClick={() => {
-                          if (activeProvider === 'qwen' && qwenAuthTab === 'oauth') {
-                            handleProviderConfigChange(activeProvider, 'oauthBaseUrl', '');
-                          } else {
-                            handleProviderConfigChange(activeProvider, 'baseUrl', '');
-                          }
-                        }}
+                        onClick={() => handleProviderConfigChange(activeProvider, 'baseUrl', '')}
                         className="p-0.5 rounded text-claude-textSecondary dark:text-claude-darkTextSecondary hover:text-claude-accent transition-colors"
                         title={i18nService.t('clear') || 'Clear'}
                       >
@@ -3777,9 +3601,8 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, notice
                         type="radio"
                         name={`${activeProvider}-apiFormat`}
                         value="anthropic"
-                        checked={activeProvider === 'qwen' && qwenAuthTab === 'oauth' ? false : getEffectiveApiFormat(activeProvider, providers[activeProvider].apiFormat) !== 'openai'}
+                        checked={getEffectiveApiFormat(activeProvider, providers[activeProvider].apiFormat) !== 'openai'}
                         onChange={() => handleProviderConfigChange(activeProvider, 'apiFormat', 'anthropic')}
-                        disabled={activeProvider === 'qwen' && qwenAuthTab === 'oauth'}
                         className="h-3.5 w-3.5 text-claude-accent focus:ring-claude-accent dark:bg-claude-darkSurface bg-claude-surface disabled:opacity-50"
                       />
                       <span className="ml-2 text-xs text-foreground">
@@ -3791,9 +3614,8 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, notice
                         type="radio"
                         name={`${activeProvider}-apiFormat`}
                         value="openai"
-                        checked={activeProvider === 'qwen' && qwenAuthTab === 'oauth' ? true : getEffectiveApiFormat(activeProvider, providers[activeProvider].apiFormat) === 'openai'}
+                        checked={getEffectiveApiFormat(activeProvider, providers[activeProvider].apiFormat) === 'openai'}
                         onChange={() => handleProviderConfigChange(activeProvider, 'apiFormat', 'openai')}
-                        disabled={activeProvider === 'qwen' && qwenAuthTab === 'oauth'}
                         className="h-3.5 w-3.5 text-claude-accent focus:ring-claude-accent dark:bg-claude-darkSurface bg-claude-surface disabled:opacity-50"
                       />
                       <span className="ml-2 text-xs text-foreground">
@@ -4076,6 +3898,13 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, notice
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-foreground">{i18nService.t('openSettings')}</span>
                   <ShortcutRecorder value={shortcuts.settings} onChange={(v) => handleShortcutChange('settings', v)} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-foreground">{i18nService.t('sendMessageShortcut')}</span>
+                  <SendShortcutSelect
+                    value={shortcuts.sendMessage}
+                    onChange={(v) => handleShortcutChange('sendMessage', v)}
+                  />
                 </div>
               </div>
             </div>

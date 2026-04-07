@@ -18,7 +18,7 @@ vi.mock('electron', () => ({
 // ---------------------------------------------------------------------------
 // Now import the class under test
 // ---------------------------------------------------------------------------
-import initSqlJs, { type Database } from 'sql.js';
+import BetterSqlite3 from 'better-sqlite3';
 
 import { CoworkStore } from './coworkStore';
 
@@ -26,15 +26,14 @@ import { CoworkStore } from './coworkStore';
 // Helpers
 // ---------------------------------------------------------------------------
 
-let db: Database;
+let db: BetterSqlite3.Database;
 let store: CoworkStore;
 
 /** Initialise a fresh in-memory database with the minimum schema. */
-async function setupDb(): Promise<void> {
-  const SQL = await initSqlJs();
-  db = new SQL.Database();
+function setupDb(): void {
+  db = new BetterSqlite3(':memory:');
 
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS cowork_sessions (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -51,7 +50,7 @@ async function setupDb(): Promise<void> {
     );
   `);
 
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS cowork_messages (
       id TEXT PRIMARY KEY,
       session_id TEXT NOT NULL,
@@ -64,7 +63,7 @@ async function setupDb(): Promise<void> {
     );
   `);
 
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS cowork_config (
       key TEXT PRIMARY KEY,
       value TEXT
@@ -90,7 +89,7 @@ async function setupDb(): Promise<void> {
     );
   `);
 
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS cowork_user_memories (
       id TEXT PRIMARY KEY,
       text TEXT NOT NULL,
@@ -102,18 +101,17 @@ async function setupDb(): Promise<void> {
     );
   `);
 
-  // CoworkStore only needs (db, saveDb)
-  store = new CoworkStore(db, () => {});
+  // CoworkStore only needs (db)
+  store = new CoworkStore(db);
 }
 
 /** Insert a session row directly. */
 function insertSession(id: string): void {
   const now = Date.now();
-  db.run(
+  db.prepare(
     `INSERT INTO cowork_sessions (id, title, claude_session_id, status, pinned, cwd, system_prompt, execution_mode, active_skill_ids, agent_id, created_at, updated_at)
      VALUES (?, 'test', NULL, 'idle', 0, '/tmp', '', 'local', '[]', 'main', ?, ?)`,
-    [id, now, now],
-  );
+  ).run(id, now, now);
 }
 
 /** Insert a message row directly, bypassing CoworkStore.addMessage. */
@@ -126,19 +124,18 @@ function insertMessage(
   sequence: number,
 ): void {
   const now = Date.now();
-  db.run(
+  db.prepare(
     `INSERT INTO cowork_messages (id, session_id, type, content, metadata, created_at, sequence)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [id, sessionId, type, content, metadata, now, sequence],
-  );
+  ).run(id, sessionId, type, content, metadata, now, sequence);
 }
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-beforeEach(async () => {
-  await setupDb();
+beforeEach(() => {
+  setupDb();
 });
 
 test('getSession returns all messages when one has corrupt metadata', () => {

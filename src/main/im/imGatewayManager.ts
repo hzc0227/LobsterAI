@@ -33,7 +33,7 @@ import {
   IMConnectivityTestResult,
   IMConnectivityVerdict,
 } from './types';
-import type { Database } from 'sql.js';
+import Database from 'better-sqlite3';
 import type { CoworkRuntime } from '../libs/agentEngine/types';
 import type { CoworkStore } from '../coworkStore';
 import { classifyErrorKey } from '../../common/coworkErrorClassify';
@@ -113,10 +113,10 @@ export class IMGatewayManager extends EventEmitter {
   private dingTalkAccessToken: string | null = null;
   private dingTalkAccessTokenExpiry = 0;
 
-  constructor(db: Database, saveDb: () => void, options?: IMGatewayManagerOptions) {
+  constructor(db: Database.Database, options?: IMGatewayManagerOptions) {
     super();
 
-    this.imStore = new IMStore(db, saveDb);
+    this.imStore = new IMStore(db);
     this.nimGateway = new NimGateway();
 
     // Store Cowork dependencies if provided
