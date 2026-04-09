@@ -2,7 +2,6 @@ import Database from 'better-sqlite3';
 import crypto from 'crypto';
 import { app } from 'electron';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -12,11 +11,7 @@ import {
   isQuestionLikeMemoryText,
 } from './libs/coworkMemoryExtractor';
 import { judgeMemoryCandidate } from './libs/coworkMemoryJudge';
-
-// Default working directory for new users
-const getDefaultWorkingDirectory = (): string => {
-  return path.join(os.homedir(), 'lobsterai', 'project');
-};
+import { getDefaultWorkingDirectory } from './defaultPaths';
 
 const TASK_WORKSPACE_CONTAINER_DIR = '.lobsterai-tasks';
 

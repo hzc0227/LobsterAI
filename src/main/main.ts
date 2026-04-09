@@ -9,9 +9,10 @@ import { buildScheduledTaskEnginePrompt } from '../scheduledTask/enginePrompt';
 import { migrateScheduledTaskRunsToOpenclaw, migrateScheduledTasksToOpenclaw } from '../scheduledTask/migrate';
 import { PlatformRegistry } from '../shared/platform';
 import { AgentManager } from './agentManager';
-import { APP_NAME } from './appConstants';
+import { APP_NAME, USER_DATA_DIR_NAME } from './appConstants';
 import { getAutoLaunchEnabled, isAutoLaunched, setAutoLaunchEnabled } from './autoLaunchManager';
 import { CoworkStore } from './coworkStore';
+import { getDefaultWorkingDirectory } from './defaultPaths';
 import { setLanguage, t } from './i18n';
 import { IMGatewayConfig, IMGatewayManager } from './im';
 import {
@@ -87,6 +88,7 @@ import { McpStore } from './mcpStore';
 import { SkillManager } from './skillManager';
 import { getSkillServiceManager } from './skillServices';
 import { SqliteStore } from './sqliteStore';
+import { resolvePreferredUserDataPath } from './userDataPaths';
 import { createTray, destroyTray, updateTrayMenu } from './trayManager';
 
 // 设置应用程序名称
@@ -410,7 +412,7 @@ const savePngWithDialog = async (
 
 const configureUserDataPath = (): void => {
   const appDataPath = app.getPath('appData');
-  const preferredUserDataPath = path.join(appDataPath, APP_NAME);
+  const preferredUserDataPath = resolvePreferredUserDataPath(appDataPath) || path.join(appDataPath, USER_DATA_DIR_NAME);
   const currentUserDataPath = app.getPath('userData');
 
   if (currentUserDataPath !== preferredUserDataPath) {
@@ -4814,8 +4816,8 @@ if (!gotTheLock) {
     // Note: Calendar permission is checked on-demand when calendar operations are requested
     // We don't trigger permission dialogs at startup to avoid annoying users
 
-    // Ensure default working directory exists
-    const defaultProjectDir = path.join(os.homedir(), 'lobsterai', 'project');
+    // Ensure the shared default working directory exists before the renderer requests it.
+    const defaultProjectDir = getDefaultWorkingDirectory();
     if (!fs.existsSync(defaultProjectDir)) {
       fs.mkdirSync(defaultProjectDir, { recursive: true });
       console.log('Created default project directory:', defaultProjectDir);
