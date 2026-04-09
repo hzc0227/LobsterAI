@@ -95,7 +95,7 @@ READVER
 PATCHES_DIR="$ELECTRON_ROOT/scripts/patches/$DESIRED_VERSION"
 PATCH_HASH=""
 if [[ -d "$PATCHES_DIR" ]]; then
-  PATCH_HASH=$(cat "$PATCHES_DIR"/*.patch 2>/dev/null | sha256sum | cut -d' ' -f1)
+  PATCH_HASH=$(node "$ELECTRON_ROOT/scripts/hash-openclaw-patches.cjs" "$PATCHES_DIR")
 fi
 
 if [[ -n "$DESIRED_VERSION" && "${OPENCLAW_FORCE_BUILD:-}" != "1" ]]; then

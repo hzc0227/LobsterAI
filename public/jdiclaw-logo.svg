@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
+  <defs>
+    <linearGradient id="jdiclaw-bg" x1="192" y1="160" x2="832" y2="864" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111827"/>
+      <stop offset="1" stop-color="#1F2937"/>
+    </linearGradient>
+    <linearGradient id="jdiclaw-slash" x1="696" y1="236" x2="920" y2="548" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FB7185"/>
+      <stop offset="1" stop-color="#F97316"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="96" y="96" width="832" height="832" rx="220" fill="url(#jdiclaw-bg)"/>
+
+  <path
+    d="M360 264H640"
+    stroke="#F8FAFC"
+    stroke-width="88"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M520 264V614C520 715 456 780 362 780C307 780 264 760 224 716"
+    stroke="#F8FAFC"
+    stroke-width="88"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <path d="M698 296L824 182" stroke="url(#jdiclaw-slash)" stroke-width="74" stroke-linecap="round"/>
+  <path d="M756 420L882 306" stroke="url(#jdiclaw-slash)" stroke-width="74" stroke-linecap="round"/>
+  <path d="M792 558L918 444" stroke="url(#jdiclaw-slash)" stroke-width="74" stroke-linecap="round"/>
+</svg>
