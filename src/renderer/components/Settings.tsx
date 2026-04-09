@@ -8,7 +8,7 @@ import { themeService } from '../services/theme';
 import { i18nService, LanguageType } from '../services/i18n';
 import { decryptSecret, encryptWithPassword, decryptWithPassword, EncryptedPayload, PasswordEncryptedPayload } from '../services/encryption';
 import { coworkService } from '../services/cowork';
-import { APP_ID, EXPORT_FORMAT_TYPE, EXPORT_PASSWORD } from '../constants/app';
+import { APP_ID, APP_NAME, EXPORT_FORMAT_TYPE, EXPORT_PASSWORD } from '../constants/app';
 import ErrorMessage from './ErrorMessage';
 import { XMarkIcon, Cog6ToothIcon, SignalIcon, CheckCircleIcon, XCircleIcon, CubeIcon, ChatBubbleLeftIcon, EnvelopeIcon, CpuChipIcon, InformationCircleIcon, UserCircleIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline';
 import { EyeIcon, EyeSlashIcon, XCircleIcon as XCircleIconSolid } from '@heroicons/react/20/solid';
@@ -3956,7 +3956,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, notice
             {/* Logo & App Name */}
             <img
               src="logo.png"
-              alt="LobsterAI"
+              alt={APP_NAME}
               className="w-16 h-16 mb-3 cursor-pointer select-none"
               onClick={() => {
                 const next = logoClickCount + 1;
@@ -3966,7 +3966,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, notice
                 }
               }}
             />
-            <h3 className="text-lg font-semibold text-foreground">LobsterAI</h3>
+            <h3 className="text-lg font-semibold text-foreground">{APP_NAME}</h3>
             <span className="text-xs text-secondary mt-1">v{appVersion}</span>
 
             {/* Info Card */}
@@ -4010,7 +4010,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, notice
                     title={i18nService.t('copyToClipboard')}
                     className="text-sm text-secondary bg-transparent border-none appearance-none p-0 m-0 cursor-pointer focus:outline-none"
                   >
-                    {ABOUT_CONTACT_EMAIL}
+                    {i18nService.t('aboutCopyContactEmailAction')}
                   </button>
                   {emailCopied && (
                     <span className="text-[11px] leading-4 text-emerald-600 dark:text-emerald-400">
@@ -4029,7 +4029,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, notice
                   }}
                   className="text-sm text-secondary hover:text-primary dark:hover:text-primary bg-transparent border-none appearance-none px-1.5 py-0.5 -mx-1.5 -my-0.5 rounded-md cursor-pointer focus:outline-none hover:bg-surface-raised transition-colors"
                 >
-                  {ABOUT_USER_MANUAL_URL}
+                  {i18nService.t('aboutOpenLinkAction')}
                 </button>
               </div>
               <div className={`flex items-center justify-between px-4 py-3${testModeUnlocked ? ' border-b border-border' : ''}`}>
@@ -4042,7 +4042,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, notice
                   }}
                   className="text-sm text-secondary hover:text-primary dark:hover:text-primary bg-transparent border-none appearance-none px-1.5 py-0.5 -mx-1.5 -my-0.5 rounded-md cursor-pointer focus:outline-none hover:bg-surface-raised transition-colors"
                 >
-                  {ABOUT_USER_COMMUNITY_URL}
+                  {i18nService.t('aboutOpenLinkAction')}
                 </button>
               </div>
               {testModeUnlocked && (
@@ -4098,7 +4098,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, notice
                 {i18nService.t('copyrightHolder')}
               </p>
               <p className="mt-1 text-xs text-secondary">
-                Copyright &copy; {new Date().getFullYear()} NetEase Youdao. All Rights Reserved.
+                Copyright &copy; {new Date().getFullYear()} JdiClaw. All Rights Reserved.
               </p>
             </div>
           </div>

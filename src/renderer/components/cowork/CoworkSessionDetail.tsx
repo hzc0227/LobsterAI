@@ -38,6 +38,7 @@ import WindowTitleBar from '../window/WindowTitleBar';
 import CoworkPromptInput, { type CoworkPromptInputRef } from './CoworkPromptInput';
 import DiffView, { extractDiffFromToolInput } from './DiffView';
 import LazyRenderTurn, { clearHeightCache } from './LazyRenderTurn';
+import { APP_NAME } from '../../constants/app';
 
 interface CoworkSessionDetailProps {
   onManageSkills?: () => void;
@@ -260,11 +261,11 @@ const composeExportCanvas = async (
 
   ctx.fillStyle = brandColor;
   ctx.font = `600 ${brandFontSize}px ${fontStack}`;
-  ctx.fillText('LobsterAI — 全场景个人助理 Agent', textX, footerCenterY - taglineFontSize / 2 - 2);
+  ctx.fillText('JdiClaw — 面向 JD 场景的桌面 Agent 工作台', textX, footerCenterY - taglineFontSize / 2 - 2);
 
   ctx.fillStyle = subtitleColor;
   ctx.font = `400 ${taglineFontSize}px ${fontStack}`;
-  ctx.fillText('7×24 小时帮你干活的全场景个人助理，由网易有道开发', textX, footerCenterY + brandFontSize / 2 + 3);
+  ctx.fillText('用于承载生产力与自动化任务', textX, footerCenterY + brandFontSize / 2 + 3);
 
   ctx.restore(); // card clip
 
@@ -2660,7 +2661,7 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
                   items.push({
                     key: `${turn.id}-asst`,
                     turnIndex: i,
-                    label: getLabel(asstContent, 'LobsterAI'),
+                    label: getLabel(asstContent, APP_NAME),
                     contentLen: asstContent.length,
                     isUser: false,
                   });
@@ -2766,7 +2767,7 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
           >
             {!railTooltip.isUser && (
               <div className="text-[12px] font-medium mb-0.5 text-neutral-800 dark:text-neutral-200">
-                LobsterAI:
+                {APP_NAME}:
               </div>
             )}
             <div
