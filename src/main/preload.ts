@@ -1,5 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron';
+
 import { IpcChannel as ScheduledTaskIpc } from '../scheduledTask/constants';
+import type { AuthRedirectTarget } from '../shared/auth/constants';
+import { AuthIpcChannel } from '../shared/auth/constants';
+import type { JdAuthStateChangedPayload } from '../shared/auth/jdAuth';
 import type { Platform } from '../shared/platform';
 
 // 暴露安全的 API 到渲染进程
@@ -457,25 +461,33 @@ contextBridge.exposeInMainWorld('electron', {
     },
   },
   auth: {
-    login: (loginUrl?: string) => ipcRenderer.invoke('auth:login', { loginUrl }),
-    exchange: (code: string) => ipcRenderer.invoke('auth:exchange', { code }),
-    getUser: () => ipcRenderer.invoke('auth:getUser'),
-    getQuota: () => ipcRenderer.invoke('auth:getQuota'),
-    logout: () => ipcRenderer.invoke('auth:logout'),
-    refreshToken: () => ipcRenderer.invoke('auth:refreshToken'),
-    getAccessToken: () => ipcRenderer.invoke('auth:getAccessToken'),
-    getModels: () => ipcRenderer.invoke('auth:getModels'),
-    getProfileSummary: () => ipcRenderer.invoke('auth:getProfileSummary'),
-    onCallback: (callback: (data: { code: string }) => void) => {
-      const handler = (_event: any, data: { code: string }) => callback(data);
-      ipcRenderer.on('auth:callback', handler);
-      return () => ipcRenderer.removeListener('auth:callback', handler);
+    login: (options?: { redirectTo?: AuthRedirectTarget | null }) =>
+      ipcRenderer.invoke(AuthIpcChannel.Login, options),
+    getState: () => ipcRenderer.invoke(AuthIpcChannel.GetState),
+    logout: () => ipcRenderer.invoke(AuthIpcChannel.Logout),
+    onStateChanged: (callback: (data: JdAuthStateChangedPayload) => void) => {
+      const handler = (_event: any, data: JdAuthStateChangedPayload) => callback(data);
+      ipcRenderer.on(AuthIpcChannel.StateChanged, handler);
+      return () => ipcRenderer.removeListener(AuthIpcChannel.StateChanged, handler);
     },
-    onQuotaChanged: (callback: () => void) => {
-      const handler = () => callback();
-      ipcRenderer.on('auth:quotaChanged', handler);
-      return () => ipcRenderer.removeListener('auth:quotaChanged', handler);
-    },
+    // 旧 Portal 登录链路相关 IPC 暂时不再暴露给渲染进程，避免误用。
+    // exchange: (code: string) => ipcRenderer.invoke('auth:exchange', { code }),
+    // getUser: () => ipcRenderer.invoke('auth:getUser'),
+    // getQuota: () => ipcRenderer.invoke('auth:getQuota'),
+    // refreshToken: () => ipcRenderer.invoke('auth:refreshToken'),
+    // getAccessToken: () => ipcRenderer.invoke('auth:getAccessToken'),
+    // getModels: () => ipcRenderer.invoke('auth:getModels'),
+    // getProfileSummary: () => ipcRenderer.invoke('auth:getProfileSummary'),
+    // onCallback: (callback: (data: { code: string }) => void) => {
+    //   const handler = (_event: any, data: { code: string }) => callback(data);
+    //   ipcRenderer.on('auth:callback', handler);
+    //   return () => ipcRenderer.removeListener('auth:callback', handler);
+    // },
+    // onQuotaChanged: (callback: () => void) => {
+    //   const handler = () => callback();
+    //   ipcRenderer.on('auth:quotaChanged', handler);
+    //   return () => ipcRenderer.removeListener('auth:quotaChanged', handler);
+    // },
   },
   feishu: {
     install: {

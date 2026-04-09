@@ -82,6 +82,7 @@ const translations: Record<LanguageType, Record<string, string>> = {
     // Auth quota
     authPlanFree: '免费',
     authPlanStandard: '标准',
+    authJdLoginWindowTitle: '京东内部登录',
 
     // ── IM connectivity test messages ───────────────────────────────────
     // Common
@@ -257,6 +258,7 @@ const translations: Record<LanguageType, Record<string, string>> = {
     // Auth quota
     authPlanFree: 'Free',
     authPlanStandard: 'Standard',
+    authJdLoginWindowTitle: 'JD Internal Login',
 
     // ── IM connectivity test messages ───────────────────────────────────
     // Common

@@ -225,24 +225,11 @@ interface McpMarketplaceData {
   servers: McpMarketplaceServer[];
 }
 
-import type { Agent, PresetAgent } from './agent';
+import type { AuthRedirectTarget } from '@shared/auth/constants';
+import type { JdAuthSnapshot, JdAuthStateChangedPayload } from '@shared/auth/jdAuth';
 import type { Platform } from '@shared/platform';
 
-interface CreditItem {
-  type: 'subscription' | 'boost' | 'free';
-  label: string;
-  labelEn: string;
-  creditsRemaining: number;
-  expiresAt: string | null;
-}
-
-interface ProfileSummaryData {
-  id: number;
-  nickname: string;
-  avatarUrl: string | null;
-  totalCreditsRemaining: number;
-  creditItems: CreditItem[];
-}
+import type { Agent, PresetAgent } from './agent';
 
 interface IElectronAPI {
   platform: string;
@@ -501,33 +488,16 @@ interface IElectronAPI {
     requestCalendar: () => Promise<{ success: boolean; granted?: boolean; status?: string; error?: string }>;
   };
   auth: {
-    login: (loginUrl?: string) => Promise<{ success: boolean; error?: string }>;
-    exchange: (code: string) => Promise<{ success: boolean; user?: any; quota?: any; error?: string }>;
-    getUser: () => Promise<{ success: boolean; user?: any; quota?: any }>;
-    getQuota: () => Promise<{ success: boolean; quota?: any }>;
+    login: (options?: { redirectTo?: AuthRedirectTarget | null }) => Promise<{ success: boolean; error?: string }>;
+    getState: () => Promise<{ success: boolean } & JdAuthSnapshot>;
     logout: () => Promise<{ success: boolean }>;
-    refreshToken: () => Promise<{ success: boolean; accessToken?: string }>;
-    getAccessToken: () => Promise<string | null>;
-    getModels: () => Promise<{ success: boolean; models?: Array<{ modelId: string; modelName: string; provider: string; apiFormat: string }> }>;
-    getProfileSummary: () => Promise<{ success: boolean; data?: ProfileSummaryData }>;
-    onCallback: (callback: (data: { code: string }) => void) => () => void;
-    onQuotaChanged: (callback: () => void) => () => void;
+    onStateChanged: (callback: (data: JdAuthStateChangedPayload) => void) => () => void;
   }
   enterprise: {
     getConfig: () => Promise<{ ui?: Record<string, 'hide' | 'disable' | 'readonly'>; disableUpdate?: boolean; version: string; name: string } | null>;
   };
   networkStatus: {
     send: (status: 'online' | 'offline') => void;
-  };
-  auth: {
-    login: (loginUrl?: string) => Promise<{ success: boolean; error?: string }>;
-    exchange: (code: string) => Promise<{ success: boolean; user?: { userId: string; phone: string; nickname: string; avatarUrl: string }; quota?: { planName: string; subscriptionStatus: string; creditsLimit: number; creditsUsed: number; creditsRemaining: number }; error?: string }>;
-    getUser: () => Promise<{ success: boolean; user?: { userId: string; phone: string; nickname: string; avatarUrl: string }; quota?: { planName: string; subscriptionStatus: string; creditsLimit: number; creditsUsed: number; creditsRemaining: number } }>;
-    getQuota: () => Promise<{ success: boolean; quota?: { planName: string; subscriptionStatus: string; creditsLimit: number; creditsUsed: number; creditsRemaining: number } }>;
-    logout: () => Promise<{ success: boolean }>;
-    refreshToken: () => Promise<{ success: boolean; accessToken?: string }>;
-    getAccessToken: () => Promise<string | null>;
-    onCallback: (callback: (data: { code: string }) => void) => () => void;
   };
   qwen: {
     oauthLogin: () => Promise<{ success: boolean; data?: QwenOAuthToken; error?: string }>;

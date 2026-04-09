@@ -7,6 +7,8 @@ import path from 'path';
 
 import { buildScheduledTaskEnginePrompt } from '../scheduledTask/enginePrompt';
 import { migrateScheduledTaskRunsToOpenclaw, migrateScheduledTasksToOpenclaw } from '../scheduledTask/migrate';
+import { AuthIpcChannel, type AuthRedirectTarget } from '../shared/auth/constants';
+import type { JdAuthStateChangedPayload } from '../shared/auth/jdAuth';
 import { PlatformRegistry } from '../shared/platform';
 import { AgentManager } from './agentManager';
 import { APP_NAME, USER_DATA_DIR_NAME } from './appConstants';
@@ -49,6 +51,7 @@ import { CoworkRunner } from './libs/coworkRunner';
 import { generateSessionTitle, probeCoworkModelReadiness } from './libs/coworkUtil';
 import { getServerApiBaseUrl, refreshEndpointsTestMode } from './libs/endpoints';
 import { mergeEnterpriseOpenclawConfig, resolveEnterpriseConfigPath, syncEnterpriseConfig } from './libs/enterpriseConfigSync';
+import { JdAuthManager } from './libs/jdAuthManager';
 import { exportLogsZip } from './libs/logExport';
 import { McpBridgeServer } from './libs/mcpBridgeServer';
 import { McpServerManager } from './libs/mcpServerManager';
@@ -88,8 +91,8 @@ import { McpStore } from './mcpStore';
 import { SkillManager } from './skillManager';
 import { getSkillServiceManager } from './skillServices';
 import { SqliteStore } from './sqliteStore';
-import { resolvePreferredUserDataPath } from './userDataPaths';
 import { createTray, destroyTray, updateTrayMenu } from './trayManager';
+import { resolvePreferredUserDataPath } from './userDataPaths';
 
 // 设置应用程序名称
 app.name = APP_NAME;
@@ -2033,6 +2036,48 @@ if (!gotTheLock) {
   };
 
   /**
+   * Broadcast the latest ERP auth state to every renderer window.
+   *
+   * Login success, logout, and session reconciliation all use the same event
+   * shape so that renderer code can react with a single listener.
+   */
+  const broadcastAuthStateChanged = (payload: JdAuthStateChangedPayload) => {
+    BrowserWindow.getAllWindows().forEach((windowInstance) => {
+      if (windowInstance.isDestroyed()) {
+        return;
+      }
+
+      try {
+        windowInstance.webContents.send(AuthIpcChannel.StateChanged, payload);
+      } catch (error) {
+        console.error('[JdAuth] failed to forward auth state change:', error);
+      }
+    });
+  };
+
+  /**
+   * ERP-only login manager.
+   *
+   * 旧 Portal 登录链路依赖 authCode 换 token；当前版本改为应用内独立登录窗，
+   * 因此把窗口、Cookie 和本地状态管理统一收敛到这个管理器里。
+   */
+  const jdAuthManager = new JdAuthManager({
+    getStore,
+    getMainWindow: () => mainWindow,
+    notifyStateChanged: (payload) => {
+      // 兼容清理：ERP 登录成功后，主动清掉旧 Portal token 和缓存模型元数据，
+      // 避免历史安装残留的 token 继续影响当前“只记录 ERP”的新链路。
+      if (payload.isLoggedIn) {
+        clearAuthTokens();
+        clearServerModelMetadata();
+      }
+
+      broadcastAuthStateChanged(payload);
+    },
+    getWindowTitle: () => t('authJdLoginWindowTitle'),
+  });
+
+  /**
    * Helper: Fetch with Bearer token, auto-refresh on 401 and retry once.
    */
   const fetchWithAuth = async (url: string, options?: RequestInit): Promise<Response> => {
@@ -2107,15 +2152,23 @@ if (!gotTheLock) {
     };
   };
 
-  ipcMain.handle('auth:login', async (_event, { loginUrl }: { loginUrl?: string } = {}) => {
+  ipcMain.handle(AuthIpcChannel.Login, async (_event, options: { redirectTo?: AuthRedirectTarget | null } = {}) => {
     try {
-      const baseUrl = loginUrl || `${getServerApiBaseUrl()}/login`;
-      const finalUrl = `${baseUrl}?source=electron`;
-      await shell.openExternal(finalUrl);
+      await jdAuthManager.openLoginWindow(options);
       return { success: true };
     } catch (error) {
       console.error('[Auth] login failed:', error);
-      return { success: false, error: error instanceof Error ? error.message : 'Failed to open login' };
+      return { success: false, error: error instanceof Error ? error.message : 'Failed to open JD login window' };
+    }
+  });
+
+  ipcMain.handle(AuthIpcChannel.GetState, async () => {
+    try {
+      const state = await jdAuthManager.getState();
+      return { success: true, ...state };
+    } catch (error) {
+      console.error('[JdAuth] get state failed:', error);
+      return { success: false, isLoggedIn: false, erp: null };
     }
   });
 
@@ -2206,20 +2259,24 @@ if (!gotTheLock) {
     }
   });
 
-  ipcMain.handle('auth:logout', async () => {
+  ipcMain.handle(AuthIpcChannel.Logout, async () => {
     try {
-      const tokens = getAuthTokens();
-      if (tokens) {
-        const serverBaseUrl = getServerApiBaseUrl();
-        await net.fetch(`${serverBaseUrl}/api/auth/logout`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${tokens.accessToken}` },
-        }).catch(() => { /* best-effort */ });
-      }
+      // 旧 Portal logout 流程依赖 accessToken 和远端 `/api/auth/logout`。
+      // 当前 ERP 登录链路只清理本地 ERP 状态与独立登录分区，不再调用旧服务端接口。
+      // const tokens = getAuthTokens();
+      // if (tokens) {
+      //   const serverBaseUrl = getServerApiBaseUrl();
+      //   await net.fetch(`${serverBaseUrl}/api/auth/logout`, {
+      //     method: 'POST',
+      //     headers: { Authorization: `Bearer ${tokens.accessToken}` },
+      //   }).catch(() => { /* best-effort */ });
+      // }
+      await jdAuthManager.logout();
       clearAuthTokens();
       clearServerModelMetadata();
       return { success: true };
-    } catch {
+    } catch (error) {
+      console.error('[JdAuth] logout failed:', error);
       clearAuthTokens();
       clearServerModelMetadata();
       return { success: true };
