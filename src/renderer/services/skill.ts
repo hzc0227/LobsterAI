@@ -1,6 +1,7 @@
 import { Skill, MarketplaceSkill, MarketTag, LocalSkillInfo, LocalizedText } from '../types/skill';
 import { getSkillStoreUrl } from './endpoints';
 import { i18nService } from './i18n';
+import { store } from '../store';
 
 export function resolveLocalizedText(text: string | LocalizedText): string {
   if (!text) return '';
@@ -39,6 +40,33 @@ class SkillService {
   private initialized = false;
   private localSkillDescriptions: Map<string, string | LocalizedText> = new Map();
   private marketplaceSkillDescriptions: Map<string, string | LocalizedText> = new Map();
+
+  /**
+   * 解析当前技能市场请求应携带的 ERP 请求头。
+   *
+   * 优先使用渲染进程 Redux 中已经同步好的 ERP 登录态，避免每次市场请求都额外触发一次 IPC。
+   * 如果当前界面状态里还没有 ERP，则回退向主进程查询一次最新登录态，保证刚启动或状态恢复阶段
+   * 仍然能把真实 ERP 带到服务端。请求头名固定为 `zerocode_erp`，与现有 JD ERP 登录链路保持一致。
+   *
+   * @returns 仅包含可用请求头的对象；若当前没有可用 ERP，则返回空对象
+   */
+  private async buildMarketplaceHeaders(): Promise<Record<string, string>> {
+    const stateErp = store.getState().auth.erp;
+    if (stateErp && stateErp.trim()) {
+      return { zerocode_erp: stateErp.trim() };
+    }
+
+    try {
+      const result = await window.electron.auth.getState();
+      if (result.success && result.isLoggedIn && result.erp) {
+        return { zerocode_erp: result.erp.trim() };
+      }
+    } catch (error) {
+      console.error('Failed to resolve ERP for skill marketplace request:', error);
+    }
+
+    return {};
+  }
 
   async init(): Promise<void> {
     if (this.initialized) return;
@@ -226,11 +254,19 @@ class SkillService {
   }
   async fetchMarketplaceSkills(): Promise<{ skills: MarketplaceSkill[]; tags: MarketTag[] }> {
     try {
-      const response = await fetch(getSkillStoreUrl());
-      if (!response.ok) {
+      const headers = await this.buildMarketplaceHeaders();
+      const response = await window.electron.api.fetch({
+        url: getSkillStoreUrl(),
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          ...headers,
+        },
+      });
+      if (!response.ok || typeof response.data !== 'object' || response.data === null) {
         throw new Error(`HTTP ${response.status}`);
       }
-      const json = await response.json();
+      const json = response.data;
       const value = json?.data?.value;
       // Store local skill descriptions for i18n lookup
       const localSkills: LocalSkillInfo[] = Array.isArray(value?.localSkill) ? value.localSkill : [];

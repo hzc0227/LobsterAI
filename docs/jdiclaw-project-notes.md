@@ -161,3 +161,124 @@ SQLite 文件完整路径当前是：
   - 多半是 SQLite 本地数据
 - 看到历史任务里是旧路径
   - 多半是旧会话保存的 `cwd`
+
+## 9. Skills 市场当前接入逻辑
+
+当前 JdiClaw / LobsterAI 的 skills 市场已经不再直接使用有道线上 `skill-store` 接口，而是切到自维护的 `/skill-store` 服务。
+
+### 9.1 环境切换来源
+
+skills 市场地址仍然遵循应用内统一的 `testMode` 开关，但只影响这一个模块自己的市场索引地址。
+
+当前开关来源：
+
+- `app_config.app.testMode`
+
+相关代码：
+
+- `src/renderer/services/config.ts`
+- `src/renderer/config.ts`
+- `src/renderer/services/endpoints.ts`
+
+当前 skills 市场环境切换规则：
+
+- `testMode = true`
+  - `http://localhost:9111/skill-store`
+- `testMode = false`
+  - `http://11.103.146.140:9111/skill-store`
+
+说明：
+
+- 这里只是 skills 市场索引地址按 test / prod 切换
+- 其他业务接口是否走 test / prod，仍由各自 `endpoints.ts` 中的逻辑决定
+- 原有有道 `skill-store` 地址已保留在代码注释中，便于后续回滚或对比排查
+
+相关代码：
+
+- `src/renderer/services/endpoints.ts`
+
+### 9.2 为什么不再直接在渲染进程 fetch
+
+最初 skills 市场请求是渲染进程直接：
+
+```ts
+fetch(getSkillStoreUrl())
+```
+
+当开发态页面来源是：
+
+```text
+http://localhost:5175
+```
+
+而 skills 市场接口来源是：
+
+```text
+http://localhost:9111
+```
+
+就会产生浏览器跨域限制。
+
+为了绕开 CORS，当前 skills 市场请求已经改成通过 Electron 主进程代理：
+
+- 渲染进程调用 `window.electron.api.fetch`
+- 主进程使用 `session.defaultSession.fetch` 发起真实请求
+
+这样请求不再受浏览器渲染进程的跨域限制。
+
+相关代码：
+
+- `src/renderer/services/skill.ts`
+- `src/main/preload.ts`
+- `src/main/main.ts`
+
+### 9.3 ERP 请求头怎么带
+
+skills 市场请求现在会主动携带：
+
+```text
+zerocode_erp
+```
+
+ERP 值读取优先级：
+
+1. 先读渲染进程 Redux 中已经同步好的登录态 `auth.erp`
+2. 如果当前界面还没同步到 ERP，则回退调用 `window.electron.auth.getState()`
+3. 若仍无 ERP，则不带该请求头
+
+这样做的原因：
+
+- 正常登录后可以直接复用当前真实 ERP
+- 应用刚启动、状态尚未同步时，市场请求仍能从主进程拿到真实 ERP
+- 不需要用户手工传 `erp` query 参数
+
+相关代码：
+
+- `src/renderer/store/slices/authSlice.ts`
+- `src/renderer/services/auth.ts`
+- `src/renderer/services/skill.ts`
+
+### 9.4 搜索技能到底怎么工作
+
+当前技能管理页里的“搜索技能”不是实时向服务端搜索，而是“先加载，再本地过滤”。
+
+具体分两类：
+
+- 已安装页签：
+  - 先从本地 IPC `window.electron.skills.list()` 读完整列表
+  - 再在前端按名称和描述做本地过滤
+
+- 技能市场页签：
+  - 页面初始化时先请求一次 `/skill-store`
+  - 将 `marketplace` 全量加载到前端内存
+  - 后续搜索框只在 `marketplaceSkills` 上做本地过滤
+
+所以当前行为不是“边输入边远程检索”，而是“本地筛选当前已经加载到页面的数据”。
+
+相关代码：
+
+- `src/renderer/components/skills/SkillsManager.tsx`
+
+## 10. 当前待办
+
+- [ ] 上线前重新梳理 skills 市场的测试开关逻辑，确认 `testMode=true` 时是否仍应固定指向 `localhost:9111/skill-store`，避免生产包或灰度环境残留本地测试地址。

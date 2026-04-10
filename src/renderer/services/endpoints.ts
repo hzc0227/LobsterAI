@@ -24,9 +24,17 @@ export const getFallbackDownloadUrl = () => isTestMode()
   : 'https://lobsterai.youdao.com/#/download-list';
 
 // Skill 商店
-export const getSkillStoreUrl = () => isTestMode()
-  ? 'https://api-overmind.youdao.com/openapi/get/luna/hardware/lobsterai/test/skill-store'
-  : 'https://api-overmind.youdao.com/openapi/get/luna/hardware/lobsterai/prod/skill-store';
+export const getSkillStoreUrl = () => {
+  // 原有有道 skills 市场接口，保留便于排查：
+  // test: https://api-overmind.youdao.com/openapi/get/luna/hardware/lobsterai/test/skill-store
+  // prod: https://api-overmind.youdao.com/openapi/get/luna/hardware/lobsterai/prod/skill-store
+  // 当前自定义 skills 市场接口：
+  // test: http://localhost:9111/skill-store
+  // prod: http://11.103.146.140:9111/skill-store
+  return isTestMode()
+    ? 'http://localhost:9111/skill-store'
+    : 'http://11.103.146.140:9111/skill-store';
+};
 
 // 登录地址
 export const getLoginOvermindUrl = () => isTestMode()
