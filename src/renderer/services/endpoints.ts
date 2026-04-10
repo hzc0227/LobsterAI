@@ -36,6 +36,14 @@ export const getSkillStoreUrl = () => {
     : 'http://11.103.146.140:9111/skill-store';
 };
 
+/**
+ * 技能诉求提交接口。
+ *
+ * 当前约定与 skills 市场服务复用同一个服务域名，只在路径后追加 `/requests`。
+ * 如果后端后续把诉求能力拆到独立服务，只需要修改这里，页面与 service 层都无需改动。
+ */
+export const getSkillRequestSubmitUrl = () => `${getSkillStoreUrl().replace(/\/+$/, '')}/requests`;
+
 // 登录地址
 export const getLoginOvermindUrl = () => isTestMode()
   ? 'https://api-overmind.youdao.com/openapi/get/luna/hardware/lobsterai/test/login-url'

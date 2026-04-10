@@ -142,3 +142,30 @@ CREATE TABLE `skill_market_skill_scope_rule` (
   KEY `idx_time_window` (`start_at`, `end_at`),
   KEY `idx_skill_code_scope_type` (`skill_code`, `scope_type`, `rule_status`, `id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='技能市场-技能可见范围规则表';
+
+SET @sharding = 'skill_market_request singleShard';
+CREATE TABLE `skill_market_request` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `request_content` TEXT NOT NULL COMMENT '用户提交的原始诉求内容，前端当前限制 500 字，这里保留更大空间以支持后续扩展',
+  `request_status` TINYINT NOT NULL DEFAULT 0 COMMENT '诉求状态：0-待处理，1-评估中，2-已采纳，3-已关闭，9-已删除',
+  `request_source` VARCHAR(32) NOT NULL DEFAULT 'desktop_skills' COMMENT '诉求来源，例如 desktop_skills、portal、ops_import',
+  `requester_erp` VARCHAR(64) NOT NULL COMMENT '提交人 ERP',
+  `requester_org_code` VARCHAR(128) NOT NULL DEFAULT '' COMMENT '提交人所属组织编码，便于后续按组织聚合诉求',
+  `requester_role_code` VARCHAR(128) NOT NULL DEFAULT '' COMMENT '提交人角色编码或岗位标识，便于评估定制化能力投放范围',
+  `adopted_skill_code` VARCHAR(64) NOT NULL DEFAULT '' COMMENT '采纳后关联的技能编码，逻辑关联 skill_market_skill.skill_code',
+  `priority_level` TINYINT NOT NULL DEFAULT 0 COMMENT '优先级：0-未评估，1-低，2-中，3-高',
+  `remark` VARCHAR(500) NOT NULL DEFAULT '' COMMENT '处理备注',
+  `ext_json` JSON DEFAULT NULL COMMENT '扩展信息JSON，例如客户端版本、搜索词、页面上下文、补充身份信息',
+  `handled_by` VARCHAR(64) NOT NULL DEFAULT '' COMMENT '最后处理人',
+  `handled_at` DATETIME(3) DEFAULT NULL COMMENT '最后处理时间',
+  `created_by` VARCHAR(64) NOT NULL DEFAULT '' COMMENT '创建人',
+  `updated_by` VARCHAR(64) NOT NULL DEFAULT '' COMMENT '更新人',
+  `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
+  `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_requester_erp_status` (`requester_erp`, `request_status`, `id`),
+  KEY `idx_status_priority_created` (`request_status`, `priority_level`, `created_at`, `id`),
+  KEY `idx_org_role_status` (`requester_org_code`, `requester_role_code`, `request_status`, `id`),
+  KEY `idx_adopted_skill_code` (`adopted_skill_code`),
+  KEY `idx_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='技能市场-技能诉求表';

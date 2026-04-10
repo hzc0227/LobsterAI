@@ -1,18 +1,19 @@
 import { ArrowPathIcon } from '@heroicons/react/20/solid';
 import {
   ArrowDownTrayIcon,
+  ChatBubbleLeftRightIcon,
   CheckCircleIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { i18nService } from '../../services/i18n';
-import { compareVersions,resolveLocalizedText, skillService } from '../../services/skill';
+import { compareVersions, resolveLocalizedText, skillService } from '../../services/skill';
 import { RootState } from '../../store';
 import { setSkills } from '../../store/slices/skillSlice';
-import { MarketplaceSkill, MarketTag,Skill } from '../../types/skill';
+import { MarketplaceSkill, MarketTag, Skill, SkillRequestMaxLength } from '../../types/skill';
 import Modal from '../common/Modal';
 import ErrorMessage from '../ErrorMessage';
 import FolderOpenIcon from '../icons/FolderOpenIcon';
@@ -62,25 +63,31 @@ interface SkillsManagerProps {
 const SkillsManager: React.FC<SkillsManagerProps> = ({ readOnly, onCreateByChat }) => {
   const dispatch = useDispatch();
   const skills = useSelector((state: RootState) => state.skill.skills);
+  const authState = useSelector((state: RootState) => state.auth);
 
   const [skillSearchQuery, setSkillSearchQuery] = useState('');
   const [skillDownloadSource, setSkillDownloadSource] = useState('');
   const [skillActionError, setSkillActionError] = useState('');
+  const [skillRequestContent, setSkillRequestContent] = useState('');
+  const [skillRequestError, setSkillRequestError] = useState('');
   const [isDownloadingSkill, setIsDownloadingSkill] = useState(false);
   const [isAddSkillMenuOpen, setIsAddSkillMenuOpen] = useState(false);
   const [isRemoteImportOpen, setIsRemoteImportOpen] = useState(false);
+  const [isSkillRequestOpen, setIsSkillRequestOpen] = useState(false);
+  const [isSubmittingSkillRequest, setIsSubmittingSkillRequest] = useState(false);
   const [importTab, setImportTab] = useState<ImportSourceType>('github');
   const [activeTab, setActiveTab] = useState<SkillTab>('installed');
   const [marketplaceSkills, setMarketplaceSkills] = useState<MarketplaceSkill[]>([]);
   const [marketTags, setMarketTags] = useState<MarketTag[]>([]);
   const [activeMarketTag, setActiveMarketTag] = useState('all');
   const [isLoadingMarketplace, setIsLoadingMarketplace] = useState(false);
+  const [isMarketplaceLoginRequired, setIsMarketplaceLoginRequired] = useState(false);
   const [installingSkillId, setInstallingSkillId] = useState<string | null>(null);
   const [selectedMarketplaceSkill, setSelectedMarketplaceSkill] = useState<MarketplaceSkill | null>(null);
   const [selectedSkill, setSelectedSkill] = useState<Skill | null>(null);
   const [skillPendingDelete, setSkillPendingDelete] = useState<Skill | null>(null);
   const [isDeletingSkill, setIsDeletingSkill] = useState(false);
-  const [securityReport, setSecurityReport] = useState<any>(null);
+  const [securityReport, setSecurityReport] = useState<React.ComponentProps<typeof SkillSecurityReport>['report'] | null>(null);
   const [pendingInstallId, setPendingInstallId] = useState<string | null>(null);
   const [isConfirmingInstall, setIsConfirmingInstall] = useState(false);
   const [upgradeState, setUpgradeState] = useState<{
@@ -95,6 +102,7 @@ const SkillsManager: React.FC<SkillsManagerProps> = ({ readOnly, onCreateByChat 
   const addSkillMenuRef = useRef<HTMLDivElement>(null);
   const addSkillButtonRef = useRef<HTMLButtonElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
+  const skillRequestInputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     let isActive = true;
@@ -117,17 +125,70 @@ const SkillsManager: React.FC<SkillsManagerProps> = ({ readOnly, onCreateByChat 
     };
   }, [dispatch]);
 
-  useEffect(() => {
-    let isActive = true;
+  /**
+   * 加载技能市场列表。
+   *
+   * 这里把“真正请求市场”的逻辑提成独立回调，方便：
+   * 1. 已登录时做后台预取，支撑已安装页的升级提示；
+   * 2. 登录成功回到 skills 页面后再次复用；
+   * 3. 把“需要登录”和“市场为空”两种状态拆开，避免 UI 误把未登录显示成空列表。
+   */
+  const loadMarketplaceSkills = useCallback(async () => {
     setIsLoadingMarketplace(true);
-    skillService.fetchMarketplaceSkills().then((data) => {
-      if (!isActive) return;
-      setMarketplaceSkills(data.skills);
-      setMarketTags(data.tags);
-      setIsLoadingMarketplace(false);
-    });
-    return () => { isActive = false; };
+    const data = await skillService.fetchMarketplaceSkills();
+    setMarketplaceSkills(data.skills);
+    setMarketTags(data.tags);
+    setIsMarketplaceLoginRequired(false);
+    setIsLoadingMarketplace(false);
   }, []);
+
+  useEffect(() => {
+    if (!authState.isLoggedIn || !authState.erp) {
+      if (!authState.isLoading) {
+        setMarketplaceSkills([]);
+        setMarketTags([]);
+      }
+      return;
+    }
+
+    void loadMarketplaceSkills();
+  }, [authState.erp, authState.isLoading, authState.isLoggedIn, loadMarketplaceSkills]);
+
+  useEffect(() => {
+    if (activeTab !== 'marketplace' || authState.isLoading) {
+      return;
+    }
+
+    if (authState.isLoggedIn && authState.erp) {
+      setIsMarketplaceLoginRequired(false);
+      return;
+    }
+
+    let isActive = true;
+    const ensureMarketplaceLogin = async () => {
+      setIsLoadingMarketplace(true);
+      try {
+        const loginResult = await skillService.ensureMarketplaceLogin();
+        if (!isActive) return;
+        if (!loginResult.isLoggedIn) {
+          setIsMarketplaceLoginRequired(true);
+        }
+      } catch (error) {
+        if (!isActive) return;
+        setIsMarketplaceLoginRequired(true);
+        setSkillActionError(error instanceof Error ? error.message : i18nService.t('loginNotAvailable'));
+      } finally {
+        if (isActive) {
+          setIsLoadingMarketplace(false);
+        }
+      }
+    };
+
+    void ensureMarketplaceLogin();
+    return () => {
+      isActive = false;
+    };
+  }, [activeTab, authState.erp, authState.isLoading, authState.isLoggedIn]);
 
   useEffect(() => {
     if (!isAddSkillMenuOpen) return;
@@ -172,13 +233,34 @@ const SkillsManager: React.FC<SkillsManagerProps> = ({ readOnly, onCreateByChat 
   }, [isRemoteImportOpen, importTab]);
 
   useEffect(() => {
-    const hasOpenDialog = selectedSkill || selectedMarketplaceSkill;
+    if (!isSkillRequestOpen) return;
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !isSubmittingSkillRequest) {
+        setIsSkillRequestOpen(false);
+        setSkillRequestError('');
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    setTimeout(() => skillRequestInputRef.current?.focus(), 0);
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isSkillRequestOpen, isSubmittingSkillRequest]);
+
+  useEffect(() => {
+    const hasOpenDialog = selectedSkill || selectedMarketplaceSkill || isSkillRequestOpen;
     if (!hasOpenDialog) return;
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         if (selectedSkill) setSelectedSkill(null);
         if (selectedMarketplaceSkill) setSelectedMarketplaceSkill(null);
+        if (isSkillRequestOpen && !isSubmittingSkillRequest) {
+          setIsSkillRequestOpen(false);
+          setSkillRequestError('');
+        }
       }
     };
 
@@ -186,7 +268,7 @@ const SkillsManager: React.FC<SkillsManagerProps> = ({ readOnly, onCreateByChat 
     return () => {
       document.removeEventListener('keydown', handleEscape);
     };
-  }, [selectedSkill, selectedMarketplaceSkill]);
+  }, [isSkillRequestOpen, isSubmittingSkillRequest, selectedSkill, selectedMarketplaceSkill]);
 
   const filteredSkills = useMemo(() => {
     const query = skillSearchQuery.toLowerCase();
@@ -211,6 +293,9 @@ const SkillsManager: React.FC<SkillsManagerProps> = ({ readOnly, onCreateByChat 
     }
     return results;
   }, [marketplaceSkills, skillSearchQuery, activeMarketTag]);
+
+  const hasSkillSearchQuery = skillSearchQuery.trim().length > 0;
+  const skillRequestCharacterCount = skillRequestContent.length;
 
   const formatSkillDate = (timestamp: number) => {
     const date = new Date(timestamp);
@@ -344,6 +429,63 @@ const SkillsManager: React.FC<SkillsManagerProps> = ({ readOnly, onCreateByChat 
     onCreateByChat?.();
   };
 
+  /**
+   * 打开“发布需求”弹窗。
+   *
+   * 双入口都复用同一个弹窗，所以这里顺手把添加菜单关闭，并清掉上一次提交残留的错误提示，
+   * 避免用户从不同入口切换时看到旧状态。
+   */
+  const handleOpenSkillRequest = () => {
+    setIsAddSkillMenuOpen(false);
+    setSkillRequestError('');
+    setIsSkillRequestOpen(true);
+  };
+
+  /**
+   * 关闭“发布需求”弹窗。
+   *
+   * 提交中的请求不允许中途关闭，避免用户误以为已经取消但服务端仍在保存。
+   * 正常关闭时只清理错误态，不主动清空输入内容，方便用户关闭后再回来继续编辑。
+   */
+  const handleCloseSkillRequest = () => {
+    if (isSubmittingSkillRequest) return;
+    setIsSkillRequestOpen(false);
+    setSkillRequestError('');
+  };
+
+  /**
+   * 提交用户在技能页里主动发布的诉求。
+   *
+   * 真正的登录检查和请求发送都下沉到 `skillService.submitSkillRequest()`，
+   * 这里主要负责驱动弹窗状态、展示错误信息，以及在成功后做一次轻量 toast 反馈。
+   */
+  const handleSubmitSkillRequest = async () => {
+    if (isSubmittingSkillRequest) return;
+
+    setIsSubmittingSkillRequest(true);
+    setSkillRequestError('');
+
+    const result = await skillService.submitSkillRequest({
+      content: skillRequestContent,
+    });
+
+    setIsSubmittingSkillRequest(false);
+
+    if (result.success) {
+      setSkillRequestContent('');
+      setIsSkillRequestOpen(false);
+      window.dispatchEvent(new CustomEvent('app:showToast', { detail: i18nService.t('skillRequestSubmitSuccess') }));
+      return;
+    }
+
+    if (result.requiresLogin) {
+      setSkillRequestError(i18nService.t('skillRequestLoginHint'));
+      return;
+    }
+
+    setSkillRequestError(result.error || i18nService.t('skillRequestSubmitFailed'));
+  };
+
   const handleImportFromDialog = async () => {
     if (isDownloadingSkill) return;
     const trimmed = skillDownloadSource.trim();
@@ -393,6 +535,31 @@ const SkillsManager: React.FC<SkillsManagerProps> = ({ readOnly, onCreateByChat 
   const getInstalledVersion = (skillId: string): string | undefined => {
     return skills.find(s => s.id === skillId)?.version;
   };
+
+  /**
+   * 渲染“没找到合适技能”时的诉求兜底卡片。
+   *
+   * 这个卡片只在用户已经产生“搜索但无结果”的上下文里出现，
+   * 既满足产品诉求，也不会在技能列表正常浏览时持续抢占视觉焦点。
+   */
+  const renderSkillRequestEmptyState = () => (
+    <div className="col-span-2 rounded-2xl border border-dashed border-border bg-surface p-6 text-center">
+      <div className="text-sm font-semibold text-foreground">
+        {i18nService.t('skillRequestEmptyStateTitle')}
+      </div>
+      <p className="mt-2 text-xs leading-6 text-secondary max-w-md mx-auto">
+        {i18nService.t('skillRequestEmptyStateDescription')}
+      </p>
+      <button
+        type="button"
+        onClick={handleOpenSkillRequest}
+        className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
+      >
+        <ChatBubbleLeftRightIcon className="h-4 w-4" />
+        <span>{i18nService.t('skillRequestAction')}</span>
+      </button>
+    </div>
+  );
 
   const handleUpgradeSkill = async (skill: MarketplaceSkill) => {
     if (upgradeState?.isActive || !skill.url) return;
@@ -607,6 +774,14 @@ const SkillsManager: React.FC<SkillsManagerProps> = ({ readOnly, onCreateByChat 
                 <PencilSquareIcon className="h-4 w-4 text-secondary" />
                 <span>{i18nService.t('createSkillByChat')}</span>
               </button>
+              <button
+                type="button"
+                onClick={handleOpenSkillRequest}
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-foreground hover:bg-surface-raised transition-colors border-t border-border"
+              >
+                <ChatBubbleLeftRightIcon className="h-4 w-4 text-secondary" />
+                <span>{i18nService.t('skillRequestAction')}</span>
+              </button>
             </div>
           )}
         </div>
@@ -699,9 +874,11 @@ const SkillsManager: React.FC<SkillsManagerProps> = ({ readOnly, onCreateByChat 
       <>
       <div className="grid grid-cols-2 gap-3">
         {filteredSkills.length === 0 ? (
-          <div className="col-span-2 text-center py-8 text-sm text-secondary">
-            {i18nService.t('noSkillsAvailable')}
-          </div>
+          hasSkillSearchQuery ? renderSkillRequestEmptyState() : (
+            <div className="col-span-2 text-center py-8 text-sm text-secondary">
+              {i18nService.t('noSkillsAvailable')}
+            </div>
+          )
         ) : (
           filteredSkills.map((skill) => (
             <div
@@ -809,10 +986,36 @@ const SkillsManager: React.FC<SkillsManagerProps> = ({ readOnly, onCreateByChat 
           </div>
         ) : (
           <>
-            {filteredMarketplaceSkills.length === 0 ? (
+            {isMarketplaceLoginRequired ? (
+              <div className="rounded-2xl border border-dashed border-border bg-surface p-6 text-center">
+                <div className="text-sm font-semibold text-foreground">
+                  {i18nService.t('skillMarketplaceLoginRequiredTitle')}
+                </div>
+                <p className="mt-2 text-xs leading-6 text-secondary max-w-md mx-auto">
+                  {i18nService.t('skillMarketplaceLoginRequiredDescription')}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void skillService.ensureMarketplaceLogin().catch((error) => {
+                      setSkillActionError(error instanceof Error ? error.message : i18nService.t('loginNotAvailable'));
+                    });
+                  }}
+                  className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
+                >
+                  <span>{i18nService.t('skillMarketplaceLoginAction')}</span>
+                </button>
+              </div>
+            ) : filteredMarketplaceSkills.length === 0 ? (
+              hasSkillSearchQuery ? (
+                <div className="grid grid-cols-2 gap-3">
+                  {renderSkillRequestEmptyState()}
+                </div>
+              ) : (
               <div className="text-center py-12 text-sm text-secondary">
                 {i18nService.t('skillMarketplaceEmpty')}
               </div>
+              )
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 {filteredMarketplaceSkills.map((skill) => (
@@ -1229,6 +1432,84 @@ const SkillsManager: React.FC<SkillsManagerProps> = ({ readOnly, onCreateByChat 
                 {isDownloadingSkill ? i18nService.t('importingSkill') : i18nService.t('importSkill')}
               </button>
             </div>
+        </Modal>
+      , document.body)}
+
+      {isSkillRequestOpen && createPortal(
+        <Modal
+          onClose={handleCloseSkillRequest}
+          overlayClassName="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          className="w-full max-w-lg mx-4 rounded-2xl bg-surface border border-border shadow-2xl p-6"
+        >
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="text-lg font-semibold text-foreground">
+                {i18nService.t('skillRequestDialogTitle')}
+              </div>
+              <p className="mt-2 text-sm leading-6 text-secondary">
+                {i18nService.t('skillRequestDialogDescription')}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleCloseSkillRequest}
+              disabled={isSubmittingSkillRequest}
+              className="p-1.5 rounded-lg text-secondary hover:text-foreground hover:bg-surface-raised transition-colors disabled:opacity-50"
+            >
+              <XMarkIcon className="h-5 w-5" />
+            </button>
+          </div>
+
+          <div className="mt-4">
+            <textarea
+              ref={skillRequestInputRef}
+              value={skillRequestContent}
+              onChange={(event) => {
+                setSkillRequestContent(event.target.value);
+                if (skillRequestError) {
+                  setSkillRequestError('');
+                }
+              }}
+              maxLength={SkillRequestMaxLength}
+              rows={6}
+              placeholder={i18nService.t('skillRequestPlaceholder')}
+              className="w-full resize-none rounded-2xl border border-border bg-background px-4 py-3 text-sm leading-6 text-foreground placeholder-secondary focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+            <div className="mt-2 flex items-center justify-between text-xs">
+              <div className="text-secondary">
+                {authState.erp
+                  ? i18nService.t('skillRequestCurrentErp').replace('{erp}', authState.erp)
+                  : i18nService.t('skillRequestLoginHint')}
+              </div>
+              <div className={skillRequestCharacterCount >= SkillRequestMaxLength ? 'text-red-500' : 'text-secondary'}>
+                {skillRequestCharacterCount}/{SkillRequestMaxLength}
+              </div>
+            </div>
+            {skillRequestError && (
+              <div className="mt-3 text-xs text-red-500">
+                {skillRequestError}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-5 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={handleCloseSkillRequest}
+              disabled={isSubmittingSkillRequest}
+              className="px-4 py-2 text-sm rounded-xl border border-border text-secondary hover:bg-surface-raised transition-colors disabled:opacity-50"
+            >
+              {i18nService.t('cancel')}
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmitSkillRequest}
+              disabled={isSubmittingSkillRequest || !skillRequestContent.trim()}
+              className="px-4 py-2 text-sm rounded-xl bg-primary text-white hover:bg-primary-hover transition-colors disabled:opacity-50"
+            >
+              {isSubmittingSkillRequest ? i18nService.t('skillRequestSubmitting') : i18nService.t('skillRequestSubmit')}
+            </button>
+          </div>
         </Modal>
       , document.body)}
 

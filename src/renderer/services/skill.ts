@@ -1,7 +1,20 @@
-import { Skill, MarketplaceSkill, MarketTag, LocalSkillInfo, LocalizedText } from '../types/skill';
-import { getSkillStoreUrl } from './endpoints';
-import { i18nService } from './i18n';
+import { AuthRedirectTarget } from '@shared/auth/constants';
+
 import { store } from '../store';
+import {
+  LocalizedText,
+  LocalSkillInfo,
+  MarketplaceSkill,
+  MarketTag,
+  Skill,
+  SkillMarketplaceLoginResult,
+  SkillRequestMaxLength,
+  SkillSecurityReport,
+  SubmitSkillRequestInput,
+  SubmitSkillRequestResult,
+} from '../types/skill';
+import { getSkillRequestSubmitUrl, getSkillStoreUrl } from './endpoints';
+import { i18nService } from './i18n';
 
 export function resolveLocalizedText(text: string | LocalizedText): string {
   if (!text) return '';
@@ -35,6 +48,13 @@ type EmailConnectivityTestResult = {
   checks: EmailConnectivityCheck[];
 };
 
+type SkillSubmitApiResponse = {
+  code?: number;
+  message?: string;
+  success?: boolean;
+  data?: unknown;
+};
+
 class SkillService {
   private skills: Skill[] = [];
   private initialized = false;
@@ -42,27 +62,53 @@ class SkillService {
   private marketplaceSkillDescriptions: Map<string, string | LocalizedText> = new Map();
 
   /**
-   * 解析当前技能市场请求应携带的 ERP 请求头。
+   * 解析当前技能市场可用的登录态。
    *
-   * 优先使用渲染进程 Redux 中已经同步好的 ERP 登录态，避免每次市场请求都额外触发一次 IPC。
+   * 优先使用渲染进程 Redux 中已经同步好的 ERP 登录态，避免每次都额外触发一次 IPC。
    * 如果当前界面状态里还没有 ERP，则回退向主进程查询一次最新登录态，保证刚启动或状态恢复阶段
-   * 仍然能把真实 ERP 带到服务端。请求头名固定为 `zerocode_erp`，与现有 JD ERP 登录链路保持一致。
+   * 仍然能拿到真实 ERP。这里返回的是“是否登录 + ERP”组合结果，供市场拉取与诉求提交统一复用。
    *
-   * @returns 仅包含可用请求头的对象；若当前没有可用 ERP，则返回空对象
+   * @returns 当前是否已登录技能市场所需 ERP 身份；未登录时返回 `erp=null`
    */
-  private async buildMarketplaceHeaders(): Promise<Record<string, string>> {
+  private async resolveMarketplaceLoginState(): Promise<{ isLoggedIn: boolean; erp: string | null }> {
     const stateErp = store.getState().auth.erp;
     if (stateErp && stateErp.trim()) {
-      return { zerocode_erp: stateErp.trim() };
+      return {
+        isLoggedIn: true,
+        erp: stateErp.trim(),
+      };
     }
 
     try {
       const result = await window.electron.auth.getState();
       if (result.success && result.isLoggedIn && result.erp) {
-        return { zerocode_erp: result.erp.trim() };
+        return {
+          isLoggedIn: true,
+          erp: result.erp.trim(),
+        };
       }
     } catch (error) {
       console.error('Failed to resolve ERP for skill marketplace request:', error);
+    }
+
+    return {
+      isLoggedIn: false,
+      erp: null,
+    };
+  }
+
+  /**
+   * 解析当前技能市场请求应携带的 ERP 请求头。
+   *
+   * 请求头名固定为 `zerocode_erp`，与现有 JD ERP 登录链路保持一致。
+   * 只有在当前确实拿到 ERP 时才附带，避免把空值 header 发给服务端。
+   *
+   * @returns 仅包含可用请求头的对象；若当前没有可用 ERP，则返回空对象
+   */
+  private async buildMarketplaceHeaders(): Promise<Record<string, string>> {
+    const loginState = await this.resolveMarketplaceLoginState();
+    if (loginState.erp) {
+      return { zerocode_erp: loginState.erp };
     }
 
     return {};
@@ -122,7 +168,7 @@ class SkillService {
     success: boolean;
     skills?: Skill[];
     error?: string;
-    auditReport?: any;
+    auditReport?: SkillSecurityReport;
     pendingInstallId?: string;
   }> {
     try {
@@ -159,7 +205,7 @@ class SkillService {
     success: boolean;
     skills?: Skill[];
     error?: string;
-    auditReport?: any;
+    auditReport?: SkillSecurityReport;
     pendingInstallId?: string;
   }> {
     try {
@@ -252,6 +298,116 @@ class SkillService {
       return null;
     }
   }
+
+  /**
+   * 确保技能市场相关操作具备 ERP 登录态。
+   *
+   * 市场浏览和“发布需求”都依赖 ERP 身份做服务端归属，因此这里先尝试复用现有登录态。
+   * 如果当前尚未登录，就直接走应用现有 JD 登录流程，并指定登录完成后回到 skills 页面。
+   *
+   * @returns 已登录时返回 ERP；未登录时会拉起登录并返回 `loginTriggered=true`
+   */
+  async ensureMarketplaceLogin(): Promise<SkillMarketplaceLoginResult> {
+    const loginState = await this.resolveMarketplaceLoginState();
+    if (loginState.isLoggedIn && loginState.erp) {
+      return {
+        isLoggedIn: true,
+        erp: loginState.erp,
+        loginTriggered: false,
+      };
+    }
+
+    const loginResult = await window.electron.auth.login({
+      redirectTo: AuthRedirectTarget.Skills,
+    });
+    if (loginResult.success === false) {
+      throw new Error(loginResult.error || i18nService.t('loginNotAvailable'));
+    }
+
+    return {
+      isLoggedIn: false,
+      erp: null,
+      loginTriggered: true,
+    };
+  }
+
+  /**
+   * 向服务端提交技能诉求。
+   *
+   * 提交前会统一做三层保护：
+   * 1. 文本去空格后不能为空；
+   * 2. 文本长度不能超过产品定义的 500 字；
+   * 3. 必须具备 ERP 登录态，否则先拉起登录流程，避免生成匿名诉求。
+   *
+   * 请求体当前只包含 `content` 和 `erp`，与产品约束保持一致。
+   *
+   * @param input 用户在弹窗中填写的原始诉求文本
+   * @returns 成功、失败或需要先登录的结果
+   */
+  async submitSkillRequest(input: SubmitSkillRequestInput): Promise<SubmitSkillRequestResult> {
+    const trimmedContent = input.content.trim();
+    if (!trimmedContent) {
+      return {
+        success: false,
+        error: i18nService.t('skillRequestEmpty'),
+      };
+    }
+
+    if (trimmedContent.length > SkillRequestMaxLength) {
+      return {
+        success: false,
+        error: i18nService.t('skillRequestTooLong').replace('{count}', String(SkillRequestMaxLength)),
+      };
+    }
+
+    try {
+      const loginState = await this.ensureMarketplaceLogin();
+      if (!loginState.isLoggedIn || !loginState.erp) {
+        return {
+          success: false,
+          requiresLogin: true,
+        };
+      }
+
+      const response = await window.electron.api.fetch({
+        url: getSkillRequestSubmitUrl(),
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          zerocode_erp: loginState.erp,
+        },
+        body: JSON.stringify({
+          content: trimmedContent,
+          erp: loginState.erp,
+        }),
+      });
+
+      if (!response.ok || typeof response.data !== 'object' || response.data === null) {
+        return {
+          success: false,
+          error: `HTTP ${response.status || 0}`,
+        };
+      }
+
+      const payload = response.data as SkillSubmitApiResponse;
+      if (payload.code === 0 || payload.success === true) {
+        return { success: true };
+      }
+
+      return {
+        success: false,
+        error: payload.message || i18nService.t('skillRequestSubmitFailed'),
+      };
+    } catch (error) {
+      console.error('Failed to submit skill request:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : i18nService.t('skillRequestSubmitFailed'),
+      };
+    }
+  }
+
   async fetchMarketplaceSkills(): Promise<{ skills: MarketplaceSkill[]; tags: MarketTag[] }> {
     try {
       const headers = await this.buildMarketplaceHeaders();

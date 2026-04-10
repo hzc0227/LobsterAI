@@ -1,35 +1,18 @@
-import React, { useState } from 'react';
-import { createPortal } from 'react-dom';
 import {
-  ShieldCheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
+  ShieldCheckIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
+import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
+
 import { i18nService } from '../../services/i18n';
+import type { SkillSecurityFinding, SkillSecurityReport as SkillSecurityReportData } from '../../types/skill';
 import Modal from '../common/Modal';
 
-interface SecurityFinding {
-  dimension: string;
-  severity: string;
-  ruleId: string;
-  file: string;
-  line?: number;
-  matchedPattern: string;
-  description: string;
-}
-
-interface SkillSecurityReport {
-  skillName: string;
-  riskLevel: string;
-  riskScore: number;
-  findings: SecurityFinding[];
-  dimensionSummary: Record<string, { count: number; maxSeverity: string }>;
-  scanDurationMs: number;
-}
-
 interface SkillSecurityReportProps {
-  report: SkillSecurityReport;
+  report: SkillSecurityReportData;
   onAction: (action: 'install' | 'installDisabled' | 'cancel') => void;
   isLoading?: boolean;
 }
@@ -77,7 +60,7 @@ const SkillSecurityReport: React.FC<SkillSecurityReportProps> = ({
 
   // Group findings by dimension and compute max severity per dimension
   const severityOrder = ['info', 'warning', 'danger', 'critical'];
-  const findingsByDimension = new Map<string, SecurityFinding[]>();
+  const findingsByDimension = new Map<string, SkillSecurityFinding[]>();
   const dimensionMaxSeverity = new Map<string, string>();
   for (const finding of visibleFindings) {
     const existing = findingsByDimension.get(finding.dimension) || [];
