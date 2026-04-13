@@ -15,7 +15,8 @@ import {
   resolvePlatformEnvironment,
 } from '../shared/platform';
 import { AgentManager } from './agentManager';
-import { APP_NAME, USER_DATA_DIR_NAME } from './appConstants';
+import { APP_NAME, APP_PROTOCOL_SCHEME, USER_DATA_DIR_NAME } from './appConstants';
+import { extractAuthCodeFromDeepLink, findAuthDeepLinkInArgs } from './authDeepLink';
 import { getAutoLaunchEnabled, isAutoLaunched, setAutoLaunchEnabled } from './autoLaunchManager';
 import { CoworkStore } from './coworkStore';
 import { getDefaultWorkingDirectory } from './defaultPaths';
@@ -1783,29 +1784,29 @@ if (!gotTheLock) {
   app.quit();
 } else {
   // Register custom protocol for OAuth callback
-  app.setAsDefaultProtocolClient('lobsterai');
+  app.setAsDefaultProtocolClient(APP_PROTOCOL_SCHEME);
 
   // Buffer for deep link auth code received before renderer is ready
   let pendingAuthCode: string | null = null;
 
   /**
-   * Parse a lobsterai:// deep link and send (or buffer) the auth code.
+   * 消费已经分发到当前实例的 JdiClaw 登录回跳 deep link，并把一次性 auth code
+   * 立即转给渲染进程，或者在窗口尚未就绪时暂存在主进程中。
+   *
+   * 这里严格依赖 `extractAuthCodeFromDeepLink()` 只接受 `jdiclaw://auth/callback`
+   * 结构，不保留旧品牌 scheme fallback。这样协议注册、安装包壳层身份和登录回跳
+   * 就会一起收敛到 JdiClaw，而不会在运行时继续悄悄兼容旧 scheme。
    */
   const handleDeepLink = (url: string) => {
-    try {
-      const parsed = new URL(url);
-      if (parsed.hostname === 'auth' && parsed.pathname === '/callback') {
-        const code = parsed.searchParams.get('code');
-        if (code) {
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('auth:callback', { code });
-          } else {
-            pendingAuthCode = code;
-          }
-        }
-      }
-    } catch (e) {
-      console.error('[Main] Failed to parse deep link:', e);
+    const code = extractAuthCodeFromDeepLink(url);
+    if (!code) {
+      return;
+    }
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('auth:callback', { code });
+    } else {
+      pendingAuthCode = code;
     }
   };
 
@@ -1825,8 +1826,9 @@ if (!gotTheLock) {
   app.on('second-instance', (_event, commandLine, workingDirectory) => {
     console.debug('[Main] second-instance event', { commandLine, workingDirectory });
 
-    // Check for deep link in command line args (Windows/Linux)
-    const deepLink = commandLine.find(arg => arg.startsWith('lobsterai://'));
+    // Windows/Linux 二次唤起时会把协议 URL 放进 argv。这里只扫描新 `jdiclaw://`
+    // scheme，显式拒绝旧品牌 scheme，确保运行中唤起路径也遵守硬切规则。
+    const deepLink = findAuthDeepLinkInArgs(commandLine);
     if (deepLink) {
       handleDeepLink(deepLink);
     }
@@ -5210,20 +5212,14 @@ if (!gotTheLock) {
     createWindow();
     console.log('[Main] initApp: window created');
 
-    // Windows/Linux cold start: parse deep link from process.argv
-    // Always buffer since renderer is not ready yet after createWindow()
-    const coldStartDeepLink = process.argv.find(arg => arg.startsWith('lobsterai://'));
+    // Windows/Linux 冷启动也必须遵循同一套硬切协议规则：只接受 `jdiclaw://`，
+    // 绝不在冷启动路径里继续兼容旧品牌 scheme。由于此时渲染层尚未就绪，
+    // 这里只做解析并缓存 code，等待渲染进程稍后主动拉取。
+    const coldStartDeepLink = findAuthDeepLinkInArgs(process.argv);
     if (coldStartDeepLink) {
-      try {
-        const parsed = new URL(coldStartDeepLink);
-        if (parsed.hostname === 'auth' && parsed.pathname === '/callback') {
-          const code = parsed.searchParams.get('code');
-          if (code) {
-            pendingAuthCode = code;
-          }
-        }
-      } catch (e) {
-        console.error('[Main] Failed to parse cold-start deep link:', e);
+      const code = extractAuthCodeFromDeepLink(coldStartDeepLink);
+      if (code) {
+        pendingAuthCode = code;
       }
     }
 

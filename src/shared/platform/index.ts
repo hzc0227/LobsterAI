@@ -1,7 +1,11 @@
 export type { BrandLink as BrandLinkType } from './brand';
 export {
   APP_ID,
+  APP_BUNDLE_ID,
   APP_NAME,
+  APP_PROTOCOL_PREFIX,
+  APP_PROTOCOL_SCHEME,
+  BRAND_AUTHOR_NAME,
   BRAND_CONTACT_EMAIL,
   BRAND_USER_COMMUNITY,
   BrandLink,

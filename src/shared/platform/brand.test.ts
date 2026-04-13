@@ -7,10 +7,14 @@ describe('shared platform brand exports', () => {
     const exports = platform as unknown as Record<string, unknown>;
 
     expect(exports.APP_NAME).toBe('JdiClaw');
+    expect(exports.APP_BUNDLE_ID).toBe('com.jdiclaw.app');
     expect(exports.APP_ID).toBe('lobsterai');
+    expect(exports.APP_PROTOCOL_SCHEME).toBe('jdiclaw');
+    expect(exports.APP_PROTOCOL_PREFIX).toBe('jdiclaw://');
+    expect(exports.BRAND_AUTHOR_NAME).toBe('JdiClaw');
     expect(exports.EXPORT_FORMAT_TYPE).toBe('lobsterai.providers');
     expect(exports.EXPORT_PASSWORD).toBe('lobsterai-APP');
-    expect(exports.BRAND_CONTACT_EMAIL).toBe('lobsterai.project@rd.netease.com');
+    expect(exports.BRAND_CONTACT_EMAIL).toBe('jdiclaw.project@rd.netease.com');
     expect(exports.BRAND_USER_COMMUNITY).toBe('10227855752');
 
     expect(exports.BrandLink).toBeDefined();

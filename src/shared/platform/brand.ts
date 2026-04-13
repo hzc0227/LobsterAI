@@ -1,20 +1,28 @@
 /**
  * Shared brand configuration for both Electron processes.
  *
- * Current rollout stage only centralizes the configuration surface.
- * Real JdiClaw production links are not ready yet, so some outward-facing
- * URLs and export markers intentionally continue to use the legacy placeholder
- * values. Later rollout tasks will update these values in this single module
- * without touching UI components or service call sites again.
+ * The hard-cut rollout splits brand data into two groups:
+ * 1. Shell identity values that must switch immediately, such as the visible
+ *    product name, bundle identifier, custom protocol scheme, and author info.
+ * 2. Business-facing placeholders that still wait for the final service-side
+ *    values, such as manual/terms links and legacy export markers.
+ *
+ * By keeping both groups in one module, main/renderer code can already depend
+ * on a single source of truth. Later rollout tasks only need to update this
+ * module instead of touching scattered UI components and services again.
  */
 
 export const APP_NAME = 'JdiClaw';
+export const APP_BUNDLE_ID = 'com.jdiclaw.app';
+export const APP_PROTOCOL_SCHEME = 'jdiclaw';
+export const APP_PROTOCOL_PREFIX = `${APP_PROTOCOL_SCHEME}://`;
 export const APP_ID = 'lobsterai';
 export const USER_DATA_DIR_NAME = 'JdiClawApp';
 export const DB_FILENAME = 'jdiclaw.sqlite';
 export const EXPORT_FORMAT_TYPE = 'lobsterai.providers';
 export const EXPORT_PASSWORD = 'lobsterai-APP';
-export const BRAND_CONTACT_EMAIL = 'lobsterai.project@rd.netease.com';
+export const BRAND_AUTHOR_NAME = 'JdiClaw';
+export const BRAND_CONTACT_EMAIL = 'jdiclaw.project@rd.netease.com';
 export const BRAND_USER_COMMUNITY = '10227855752';
 
 export const BrandLink = {
