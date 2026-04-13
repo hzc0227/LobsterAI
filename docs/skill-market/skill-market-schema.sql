@@ -5,6 +5,7 @@
 -- 3. version_no 必须与压缩包内 SKILL.md 的 version 一致。
 -- 4. package_url 必须为客户端可直接下载的 zip 地址，建议路径名以 .zip 结尾。
 -- 5. source_vendor 默认值统一为 JdiClaw。
+-- 6. TEXT/BLOB/JSON 列禁止 NOT NULL（与中间件/分库规范一致）。
 
 SET @sharding = 'skill_market_skill singleShard';
 CREATE TABLE `skill_market_skill` (
@@ -37,7 +38,7 @@ CREATE TABLE `skill_market_skill_i18n` (
   `skill_code` VARCHAR(64) NOT NULL COMMENT '技能编码，逻辑关联 skill_market_skill.skill_code',
   `language_code` VARCHAR(16) NOT NULL COMMENT '语言编码，例如 zh、en',
   `skill_name_i18n` VARCHAR(128) NOT NULL COMMENT '本地化技能名称',
-  `description_text` TEXT NOT NULL COMMENT '本地化技能描述',
+  `description_text` TEXT DEFAULT NULL COMMENT '本地化技能描述',
   `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
   `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '更新时间',
   PRIMARY KEY (`id`),
@@ -146,7 +147,7 @@ CREATE TABLE `skill_market_skill_scope_rule` (
 SET @sharding = 'skill_market_request singleShard';
 CREATE TABLE `skill_market_request` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `request_content` TEXT NOT NULL COMMENT '用户提交的原始诉求内容，前端当前限制 500 字，这里保留更大空间以支持后续扩展',
+  `request_content` TEXT DEFAULT NULL COMMENT '用户提交的原始诉求内容，前端当前限制 500 字，这里保留更大空间以支持后续扩展',
   `request_status` TINYINT NOT NULL DEFAULT 0 COMMENT '诉求状态：0-待处理，1-评估中，2-已采纳，3-已关闭，9-已删除',
   `request_source` VARCHAR(32) NOT NULL DEFAULT 'desktop_skills' COMMENT '诉求来源，例如 desktop_skills、portal、ops_import',
   `requester_erp` VARCHAR(64) NOT NULL COMMENT '提交人 ERP',

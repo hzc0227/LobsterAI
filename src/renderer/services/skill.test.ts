@@ -6,7 +6,7 @@ const authLogin = vi.fn();
 const apiFetch = vi.fn();
 
 vi.mock('./endpoints', () => ({
-  getSkillStoreUrl: () => 'http://11.103.146.140:9111/skill-store',
+  getSkillStoreUrl: () => 'http://jdi-skills-api.jd.com/skill-store',
   getSkillRequestSubmitUrl: () => 'http://11.103.146.140:9111/skill-store/requests',
 }));
 
@@ -53,7 +53,7 @@ describe('skillService.fetchMarketplaceSkills', () => {
 
     expect(apiFetch).toHaveBeenCalledWith(
       expect.objectContaining({
-        url: 'http://11.103.146.140:9111/skill-store',
+        url: 'http://jdi-skills-api.jd.com/skill-store',
         method: 'GET',
         headers: expect.objectContaining({
           zerocode_erp: 'joy-user',
@@ -87,7 +87,7 @@ describe('skillService.fetchMarketplaceSkills', () => {
     expect(authGetState).toHaveBeenCalledTimes(1);
     expect(apiFetch).toHaveBeenCalledWith(
       expect.objectContaining({
-        url: 'http://11.103.146.140:9111/skill-store',
+        url: 'http://jdi-skills-api.jd.com/skill-store',
         method: 'GET',
         headers: expect.objectContaining({
           zerocode_erp: 'fallback-user',

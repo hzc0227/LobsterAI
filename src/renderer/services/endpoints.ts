@@ -30,10 +30,11 @@ export const getSkillStoreUrl = () => {
   // prod: https://api-overmind.youdao.com/openapi/get/luna/hardware/lobsterai/prod/skill-store
   // 当前自定义 skills 市场接口：
   // test: http://localhost:9111/skill-store
-  // prod: http://11.103.146.140:9111/skill-store
+  // prod (旧 IP): http://11.103.146.140:9111/skill-store
+  // prod (当前域名): http://jdi-skills-api.jd.com/skill-store
   return isTestMode()
     ? 'http://localhost:9111/skill-store'
-    : 'http://11.103.146.140:9111/skill-store';
+    : 'http://jdi-skills-api.jd.com/skill-store';
 };
 
 /**
