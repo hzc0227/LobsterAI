@@ -3,38 +3,52 @@
  * 后续新增的业务接口也应在此文件中配置。
  */
 
+import {
+  getFallbackDownloadUrlForEnvironment,
+  getLoginOvermindUrlForEnvironment,
+  getManualUpdateCheckUrlForEnvironment,
+  getPortalPricingUrlForEnvironment,
+  getPortalProfileUrlForEnvironment,
+  getSkillRequestSubmitUrlForEnvironment,
+  getSkillStoreUrlForEnvironment,
+  getUpdateCheckUrlForEnvironment,
+  resolvePlatformEnvironment,
+} from '../../shared/platform/endpoints';
 import { configService } from './config';
 
 const isTestMode = () => {
   return configService.getConfig().app?.testMode === true;
 };
 
+/**
+ * 根据渲染进程当前配置解析共享环境枚举。
+ *
+ * 渲染进程只负责读取本地 `testMode` 开关，真正的 URL 表已经统一迁移到
+ * `src/shared/platform/endpoints.ts`。这样当前阶段可以先完成配置抽象，
+ * 等真实 JdiClaw 地址准备好后，只修改共享模块即可，不需要再碰页面和 service。
+ *
+ * @returns 当前渲染进程应使用的共享环境值。
+ */
+const resolveCurrentEnvironment = () => {
+  return resolvePlatformEnvironment(isTestMode());
+};
+
 // 自动更新
-export const getUpdateCheckUrl = () => isTestMode()
-  ? 'https://api-overmind.youdao.com/openapi/get/luna/hardware/lobsterai/test/update'
-  : 'https://api-overmind.youdao.com/openapi/get/luna/hardware/lobsterai/prod/update';
+export const getUpdateCheckUrl = () => getUpdateCheckUrlForEnvironment(resolveCurrentEnvironment());
 
 // 手动检查更新
-export const getManualUpdateCheckUrl = () => isTestMode()
-  ? 'https://api-overmind.youdao.com/openapi/get/luna/hardware/lobsterai/test/update-manual'
-  : 'https://api-overmind.youdao.com/openapi/get/luna/hardware/lobsterai/prod/update-manual';
+export const getManualUpdateCheckUrl = () => getManualUpdateCheckUrlForEnvironment(resolveCurrentEnvironment());
 
-export const getFallbackDownloadUrl = () => isTestMode()
-  ? 'https://lobsterai.inner.youdao.com/#/download-list'
-  : 'https://lobsterai.youdao.com/#/download-list';
+export const getFallbackDownloadUrl = () => getFallbackDownloadUrlForEnvironment(resolveCurrentEnvironment());
 
 // Skill 商店
 export const getSkillStoreUrl = () => {
-  // 原有有道 skills 市场接口，保留便于排查：
-  // test: https://api-overmind.youdao.com/openapi/get/luna/hardware/lobsterai/test/skill-store
-  // prod: https://api-overmind.youdao.com/openapi/get/luna/hardware/lobsterai/prod/skill-store
-  // 当前自定义 skills 市场接口：
-  // test: http://localhost:9111/skill-store
-  // prod (旧 IP): http://11.103.146.140:9111/skill-store
-  // prod (当前域名): http://jdi-skills-api.jd.com/skill-store
-  return isTestMode()
-    ? 'http://localhost:9111/skill-store'
-    : 'http://jdi-skills-api.jd.com/skill-store';
+  /**
+   * 当前阶段仍沿用占位技能市场地址，但地址本身已经统一迁移到共享模块。
+   * 这里保留一个单独方法，是为了维持现有调用方 API 不变，同时把“配置抽象先行，
+   * 最终地址后填”的约束锁死在共享层。
+   */
+  return getSkillStoreUrlForEnvironment(resolveCurrentEnvironment());
 };
 
 /**
@@ -43,18 +57,14 @@ export const getSkillStoreUrl = () => {
  * 当前约定与 skills 市场服务复用同一个服务域名，只在路径后追加 `/requests`。
  * 如果后端后续把诉求能力拆到独立服务，只需要修改这里，页面与 service 层都无需改动。
  */
-export const getSkillRequestSubmitUrl = () => `${getSkillStoreUrl().replace(/\/+$/, '')}/requests`;
+export const getSkillRequestSubmitUrl = () => getSkillRequestSubmitUrlForEnvironment(resolveCurrentEnvironment());
 
 // 登录地址
-export const getLoginOvermindUrl = () => isTestMode()
-  ? 'https://api-overmind.youdao.com/openapi/get/luna/hardware/lobsterai/test/login-url'
-  : 'https://api-overmind.youdao.com/openapi/get/luna/hardware/lobsterai/prod/login-url';
+export const getLoginOvermindUrl = () => getLoginOvermindUrlForEnvironment(resolveCurrentEnvironment());
 
-// Portal 页面
-const PORTAL_BASE_TEST = 'https://c.youdao.com/dict/hardware/cowork/lobsterai-portal.html#';
-const PORTAL_BASE_PROD = 'https://c.youdao.com/dict/hardware/octopus/lobsterai-portal.html#';
-
-const getPortalBase = () => isTestMode() ? PORTAL_BASE_TEST : PORTAL_BASE_PROD;
-
-export const getPortalPricingUrl = () => `${getPortalBase()}/pricing`;
-export const getPortalProfileUrl = () => `${getPortalBase()}/profile`;
+/**
+ * 价格页和个人页都从共享 Portal 基地址派生，避免组件层继续散落 hash 路由拼接逻辑。
+ * 当前依旧使用占位地址，但统一入口已经建立，后续真实地址切换时无需再到渲染层全文替换。
+ */
+export const getPortalPricingUrl = () => getPortalPricingUrlForEnvironment(resolveCurrentEnvironment());
+export const getPortalProfileUrl = () => getPortalProfileUrlForEnvironment(resolveCurrentEnvironment());

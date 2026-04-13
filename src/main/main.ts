@@ -9,7 +9,11 @@ import { buildScheduledTaskEnginePrompt } from '../scheduledTask/enginePrompt';
 import { migrateScheduledTaskRunsToOpenclaw, migrateScheduledTasksToOpenclaw } from '../scheduledTask/migrate';
 import { AuthIpcChannel, type AuthRedirectTarget } from '../shared/auth/constants';
 import type { JdAuthStateChangedPayload } from '../shared/auth/jdAuth';
-import { PlatformRegistry } from '../shared/platform';
+import {
+  getMcpMarketplaceUrlForEnvironment,
+  PlatformRegistry,
+  resolvePlatformEnvironment,
+} from '../shared/platform';
 import { AgentManager } from './agentManager';
 import { APP_NAME, USER_DATA_DIR_NAME } from './appConstants';
 import { getAutoLaunchEnabled, isAutoLaunched, setAutoLaunchEnabled } from './autoLaunchManager';
@@ -2572,9 +2576,12 @@ if (!gotTheLock) {
   });
 
   ipcMain.handle('mcp:fetchMarketplace', async () => {
-    const url = app.isPackaged
-      ? 'https://api-overmind.youdao.com/openapi/get/luna/hardware/lobsterai/prod/mcp-marketplace'
-      : 'https://api-overmind.youdao.com/openapi/get/luna/hardware/lobsterai/test/mcp-marketplace';
+    /**
+     * MCP 市场地址在当前阶段仍然沿用占位服务，但地址本身已经迁移到共享配置层。
+     * 这里仅根据打包态映射共享环境，避免主进程继续持有独立硬编码 URL。
+     * 等真实 JdiClaw 服务地址可用时，只需要更新共享 endpoint 模块。
+     */
+    const url = getMcpMarketplaceUrlForEnvironment(resolvePlatformEnvironment(!app.isPackaged));
     try {
       const https = await import('https');
       const data = await new Promise<string>((resolve, reject) => {

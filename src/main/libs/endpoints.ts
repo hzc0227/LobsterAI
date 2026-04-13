@@ -1,4 +1,9 @@
 import { app } from 'electron';
+
+import {
+  getServerApiBaseUrlForEnvironment,
+  resolvePlatformEnvironment,
+} from '../../shared/platform/endpoints';
 import type { SqliteStore } from '../sqliteStore';
 
 let cachedTestMode: boolean | null = null;
@@ -21,11 +26,29 @@ const isTestMode = (): boolean => {
 };
 
 /**
- * Server API base URL — switches based on testMode.
- * Used for auth exchange/refresh, models, proxy, etc.
+ * Resolve the shared environment selector for main-process endpoint lookups.
+ *
+ * The main process owns its own packaged-vs-test bootstrap logic, but URL
+ * ownership now lives in `src/shared/platform/endpoints.ts`. This helper keeps
+ * the local test-mode policy explicit while delegating the actual URL table to
+ * the shared configuration layer introduced in task one.
+ *
+ * @returns The shared environment enum corresponding to the current main-process mode.
+ */
+const resolveCurrentEnvironment = () => {
+  return resolvePlatformEnvironment(isTestMode());
+};
+
+/**
+ * Resolve the server API base URL from the shared endpoint module.
+ *
+ * Task one only abstracts configuration ownership and deliberately does not
+ * replace the placeholder backend values yet. This wrapper therefore must stay
+ * thin: it translates the main-process test-mode signal into the shared
+ * environment enum and reads the URL from the centralized table.
+ *
+ * @returns The configured server API base URL for the current environment.
  */
 export const getServerApiBaseUrl = (): string => {
-  return isTestMode()
-    ? 'https://lobsterai-server.inner.youdao.com'
-    : 'https://lobsterai-server.youdao.com';
+  return getServerApiBaseUrlForEnvironment(resolveCurrentEnvironment());
 };

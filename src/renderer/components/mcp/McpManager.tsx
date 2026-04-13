@@ -1,19 +1,21 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import SearchIcon from '../icons/SearchIcon';
-import TrashIcon from '../icons/TrashIcon';
-import PencilIcon from '../icons/PencilIcon';
-import ConnectorIcon from '../icons/ConnectorIcon';
+
+import { mcpRegistry } from '../../data/mcpRegistry';
 import { i18nService } from '../../services/i18n';
 import { mcpService } from '../../services/mcp';
-import { setMcpServers } from '../../store/slices/mcpSlice';
 import { RootState } from '../../store';
-import { McpServerConfig, McpServerFormData, McpRegistryEntry, McpMarketplaceCategoryInfo } from '../../types/mcp';
-import { mcpRegistry, mcpCategories } from '../../data/mcpRegistry';
+import { setMcpServers } from '../../store/slices/mcpSlice';
+import { McpRegistryEntry,McpServerConfig, McpServerFormData } from '../../types/mcp';
+import Modal from '../common/Modal';
 import ErrorMessage from '../ErrorMessage';
+import ConnectorIcon from '../icons/ConnectorIcon';
+import PencilIcon from '../icons/PencilIcon';
+import SearchIcon from '../icons/SearchIcon';
+import TrashIcon from '../icons/TrashIcon';
 import Tooltip from '../ui/Tooltip';
 import McpServerFormModal from './McpServerFormModal';
-import Modal from '../common/Modal';
+import { getVisibleMcpTabs,McpTab } from './mcpTabs';
 
 const TRANSPORT_BADGE_COLORS: Record<string, string> = {
   stdio: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
@@ -21,13 +23,11 @@ const TRANSPORT_BADGE_COLORS: Record<string, string> = {
   http: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
 };
 
-type McpTab = 'installed' | 'marketplace' | 'custom';
-
 const McpManager: React.FC = () => {
   const dispatch = useDispatch();
   const servers = useSelector((state: RootState) => state.mcp.servers);
 
-  const [activeTab, setActiveTab] = useState<McpTab>('installed');
+  const [activeTab, setActiveTab] = useState<McpTab>(McpTab.Installed);
   const [searchQuery, setSearchQuery] = useState('');
   const [actionError, setActionError] = useState('');
   const [pendingDelete, setPendingDelete] = useState<McpServerConfig | null>(null);
@@ -35,12 +35,11 @@ const McpManager: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingServer, setEditingServer] = useState<McpServerConfig | null>(null);
   const [installingRegistry, setInstallingRegistry] = useState<McpRegistryEntry | null>(null);
-  const [activeCategory, setActiveCategory] = useState('all');
-  const [dynamicRegistry, setDynamicRegistry] = useState<McpRegistryEntry[]>(mcpRegistry);
-  const [dynamicCategories, setDynamicCategories] = useState<ReadonlyArray<{ id: string; key: string; name_zh?: string; name_en?: string }>>(mcpCategories);
+  const [dynamicRegistry] = useState<McpRegistryEntry[]>(mcpRegistry);
   const [bridgeSyncing, setBridgeSyncing] = useState(false);
   const [bridgeSyncResult, setBridgeSyncResult] = useState<{ tools: number; error?: string } | null>(null);
   const currentLanguage = i18nService.getLanguage();
+  const visibleTabs = getVisibleMcpTabs();
 
   useEffect(() => {
     let isActive = true;
@@ -52,37 +51,6 @@ const McpManager: React.FC = () => {
     loadServers();
     return () => { isActive = false; };
   }, [dispatch]);
-
-  useEffect(() => {
-    let isActive = true;
-    const fetchMarketplace = async () => {
-      const result = await mcpService.fetchMarketplace();
-      if (!isActive || !result) return;
-      setDynamicRegistry(result.registry);
-      const cats: Array<{ id: string; key: string; name_zh?: string; name_en?: string }> = [
-        { id: 'all', key: 'mcpCategoryAll' },
-        ...result.categories
-          .filter((c: McpMarketplaceCategoryInfo) => c.id !== 'all')
-          .map((c: McpMarketplaceCategoryInfo) => ({
-            id: c.id,
-            key: '',
-            name_zh: c.name_zh,
-            name_en: c.name_en,
-          })),
-      ];
-      setDynamicCategories(cats);
-    };
-    fetchMarketplace();
-    return () => { isActive = false; };
-  }, []);
-
-  const installedRegistryIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const s of servers) {
-      if (s.registryId) ids.add(s.registryId);
-    }
-    return ids;
-  }, [servers]);
 
   const getRegistryEntryDescription = (entry: McpRegistryEntry): string => {
     const remoteDescription = currentLanguage === 'zh' ? entry.description_zh : entry.description_en;
@@ -151,21 +119,6 @@ const McpManager: React.FC = () => {
     );
   }, [servers, searchQuery]);
 
-  const filteredMarketplace = useMemo(() => {
-    const query = searchQuery.toLowerCase();
-    let entries = [...dynamicRegistry];
-    if (query) {
-      entries = entries.filter(e =>
-        e.name.toLowerCase().includes(query)
-        || getRegistryEntryDescription(e).toLowerCase().includes(query)
-      );
-    }
-    if (activeCategory !== 'all') {
-      entries = entries.filter(e => e.category === activeCategory);
-    }
-    return entries;
-  }, [searchQuery, activeCategory, dynamicRegistry, currentLanguage]);
-
   const handleToggleEnabled = async (serverId: string) => {
     const targetServer = servers.find(s => s.id === serverId);
     if (!targetServer) return;
@@ -208,12 +161,6 @@ const McpManager: React.FC = () => {
   const handleOpenEditForm = (server: McpServerConfig) => {
     setEditingServer(server);
     setInstallingRegistry(getRegistryEntryForServer(server) ?? null);
-    setIsFormOpen(true);
-  };
-
-  const handleInstallFromRegistry = (entry: McpRegistryEntry) => {
-    setEditingServer(null);
-    setInstallingRegistry(entry);
     setIsFormOpen(true);
   };
 
@@ -286,11 +233,6 @@ const McpManager: React.FC = () => {
       if (syncTimeout) clearTimeout(syncTimeout);
     };
   }, []);
-
-  const marketplaceCount = useMemo(
-    () => dynamicRegistry.length,
-    [dynamicRegistry]
-  );
 
   const customCount = useMemo(
     () => servers.filter(s => !s.isBuiltIn).length,
@@ -379,59 +321,34 @@ const McpManager: React.FC = () => {
 
         {/* Tabs */}
         <div className="flex items-center border-b border-border">
-          <button type="button" onClick={() => setActiveTab('installed')} className={tabClass('installed')}>
-            {i18nService.t('mcpInstalled')}
-            {servers.length > 0 && (
-              <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-surface-raised">
-                {servers.length}
-              </span>
-            )}
-            <div className={tabIndicatorClass('installed')} />
-          </button>
-          <button type="button" onClick={() => setActiveTab('marketplace')} className={tabClass('marketplace')}>
-            {i18nService.t('mcpMarketplace')}
-            {marketplaceCount > 0 && (
-              <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-surface-raised">
-                {marketplaceCount}
-              </span>
-            )}
-            <div className={tabIndicatorClass('marketplace')} />
-          </button>
-          <button type="button" onClick={() => setActiveTab('custom')} className={tabClass('custom')}>
-            {i18nService.t('mcpCustom')}
-            {customCount > 0 && (
-              <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-surface-raised">
-                {customCount}
-              </span>
-            )}
-            <div className={tabIndicatorClass('custom')} />
-          </button>
+          {visibleTabs.includes(McpTab.Installed) && (
+            <button type="button" onClick={() => setActiveTab(McpTab.Installed)} className={tabClass(McpTab.Installed)}>
+              {i18nService.t('mcpInstalled')}
+              {servers.length > 0 && (
+                <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-surface-raised">
+                  {servers.length}
+                </span>
+              )}
+              <div className={tabIndicatorClass(McpTab.Installed)} />
+            </button>
+          )}
+          {visibleTabs.includes(McpTab.Custom) && (
+            <button type="button" onClick={() => setActiveTab(McpTab.Custom)} className={tabClass(McpTab.Custom)}>
+              {i18nService.t('mcpCustom')}
+              {customCount > 0 && (
+                <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-surface-raised">
+                  {customCount}
+                </span>
+              )}
+              <div className={tabIndicatorClass(McpTab.Custom)} />
+            </button>
+          )}
         </div>
-
-        {/* Category filter pills (Marketplace only) */}
-        {activeTab === 'marketplace' && (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {dynamicCategories.map((cat) => (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => setActiveCategory(cat.id)}
-                className={`px-2.5 py-1 text-xs rounded-lg transition-colors ${
-                  activeCategory === cat.id
-                    ? 'bg-primary text-white'
-                    : 'bg-surface text-secondary hover:bg-surface-raised border border-border'
-                }`}
-              >
-                {(i18nService.getLanguage() === 'zh' ? cat.name_zh : cat.name_en) || i18nService.t(cat.key)}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       <div>
       {/* ── Tab: Installed ──────────────────────────────── */}
-      {activeTab === 'installed' && (
+      {activeTab === McpTab.Installed && (
         <div className="grid grid-cols-2 gap-3">
           {filteredInstalled.length === 0 ? (
             <div className="col-span-2 text-center py-12 text-sm text-secondary">
@@ -530,74 +447,8 @@ const McpManager: React.FC = () => {
         </div>
       )}
 
-      {/* ── Tab: Marketplace ────────────────────────────── */}
-      {activeTab === 'marketplace' && (
-        <div>
-          <div className="grid grid-cols-2 gap-3">
-            {filteredMarketplace.length === 0 ? (
-              <div className="col-span-2 text-center py-12 text-sm text-secondary">
-                {i18nService.t('noMcpServersAvailable')}
-              </div>
-            ) : (
-              filteredMarketplace.map((entry) => (
-                <div
-                  key={entry.id}
-                  className="rounded-xl border border-border bg-surface p-3 transition-colors hover:border-primary"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-7 h-7 rounded-lg bg-surface flex items-center justify-center flex-shrink-0">
-                        <ConnectorIcon className="h-4 w-4 text-secondary" />
-                      </div>
-                      <span className="text-sm font-medium text-foreground truncate">
-                        {entry.name}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                      {installedRegistryIds.has(entry.id) ? (
-                        <span className="px-2.5 py-1 text-xs rounded-lg bg-surface text-secondary">
-                          {i18nService.t('mcpInstalled')}
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleInstallFromRegistry(entry)}
-                          className="px-2.5 py-1 text-xs rounded-lg bg-primary text-white hover:bg-primary-hover transition-colors"
-                        >
-                          {i18nService.t('mcpInstall')}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-secondary line-clamp-2 mb-2">
-                    {getRegistryEntryDescription(entry)}
-                  </p>
-
-                  <div className="flex items-center gap-2 text-[10px] text-secondary">
-                    <span className={`px-1.5 py-0.5 rounded font-medium ${TRANSPORT_BADGE_COLORS[entry.transportType] || ''}`}>
-                      {entry.transportType}
-                    </span>
-                    <span>·</span>
-                    <span className="truncate">{getStdioCommandSummary(entry.command, entry.defaultArgs)}</span>
-                    {entry.requiredEnvKeys && entry.requiredEnvKeys.length > 0 && (
-                      <>
-                        <span>·</span>
-                        <span className="text-amber-500 dark:text-amber-400">
-                          {entry.requiredEnvKeys.length} key{entry.requiredEnvKeys.length > 1 ? 's' : ''}
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
       {/* ── Tab: Custom ─────────────────────────────────── */}
-      {activeTab === 'custom' && (
+      {activeTab === McpTab.Custom && (
         <div className="space-y-6">
           {/* Custom servers grid (add button + server cards) */}
           <div className="grid grid-cols-2 gap-3">
