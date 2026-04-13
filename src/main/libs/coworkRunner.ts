@@ -15,6 +15,7 @@ import { isDeleteCommand, isDangerousCommand } from './commandSafety';
 import { isQuestionLikeMemoryText, type CoworkMemoryGuardLevel } from './coworkMemoryExtractor';
 import { setCoworkProxySessionId } from './coworkOpenAICompatProxy';
 import { SCHEDULED_TASK_SWITCH_MESSAGE } from '../../scheduledTask/enginePrompt';
+import { APP_ID } from '../../shared/platform/brand';
 import { z } from 'zod';
 
 const ATTACHMENT_LINE_RE = /^\s*(?:[-*]\s*)?(输入文件|input\s*file)\s*[:：]\s*(.+?)\s*$/i;
@@ -52,7 +53,7 @@ const TOOL_INPUT_PREVIEW_MAX_CHARS = 4000;
 const TOOL_INPUT_PREVIEW_MAX_DEPTH = 5;
 const TOOL_INPUT_PREVIEW_MAX_KEYS = 60;
 const TOOL_INPUT_PREVIEW_MAX_ITEMS = 30;
-const TASK_WORKSPACE_CONTAINER_DIR = '.lobsterai-tasks';
+const TASK_WORKSPACE_CONTAINER_DIR = `.${APP_ID}-tasks`;
 const PERMISSION_RESPONSE_TIMEOUT_MS = 60_000;
 const DELETE_TOOL_NAMES = new Set(['delete', 'remove', 'unlink', 'rmdir']);
 const SAFETY_APPROVAL_ALLOW_OPTION = '允许本次操作';

@@ -1,6 +1,7 @@
 import { test, expect } from 'vitest';
 import { makeModel } from '../fixtures';
 import { CoworkTaskPolicy } from './coworkPolicy';
+import { buildManagedSessionKey } from '../../main/libs/openclawChannelSessionSync';
 import {
   OriginKind, BindingKind, DeliveryMode, DeliveryChannel, SessionTarget,
 } from '../constants';
@@ -73,7 +74,7 @@ test('CoworkPolicy.toWireBinding: ui_session binding -> managed sessionKey', () 
   const policy = new CoworkTaskPolicy();
   const result = policy.toWireBinding({ kind: BindingKind.UISession, sessionId: 'sess-x' });
   expect(result.sessionTarget).toBe(SessionTarget.Main);
-  expect(result.sessionKey).toBe('agent:main:lobsterai:sess-x');
+  expect(result.sessionKey).toBe(buildManagedSessionKey('sess-x'));
 });
 
 test('CoworkPolicy.toWireBinding: session_key binding -> isolated + original sessionKey', () => {

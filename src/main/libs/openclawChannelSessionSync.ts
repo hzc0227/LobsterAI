@@ -9,11 +9,13 @@ import type { CoworkStore } from '../coworkStore';
 import type { IMStore } from '../im/imStore';
 import type { Platform } from '../im/types';
 import { PlatformRegistry } from '../../shared/platform';
+import { APP_ID } from '../../shared/platform/brand';
 import { t } from '../i18n';
 import { session } from '@electron/remote';
 
 
-const LOBSTERAI_SESSION_PREFIX = 'lobsterai:';
+export const MANAGED_SESSION_NAMESPACE = APP_ID;
+const MANAGED_SESSION_PREFIX = `${MANAGED_SESSION_NAMESPACE}:`;
 export const DEFAULT_MANAGED_AGENT_ID = 'main';
 
 export interface ManagedSessionKey {
@@ -21,21 +23,47 @@ export interface ManagedSessionKey {
   sessionId: string;
 }
 
+/**
+ * 构造当前版本唯一认可的本地受管 session key。
+ *
+ * 这里直接硬切到 `jdiclaw` 命名空间，不再接受旧的 `lobsterai`
+ * 生成路径，原因是任务三已经明确“不兼容旧 session key”。如果继续
+ * 产出旧前缀，会把新品牌会话和历史残留混在一起，导致路由解析、
+ * grep 守门和后续排障都无法确认数据到底来自哪一代客户端。
+ *
+ * @param sessionId 本地 cowork session 的稳定 ID。
+ * @param agentId 受管 agent ID；为空时回退到主 agent。
+ * @returns 供 OpenClaw 与本地存储共用的 canonical session key。
+ */
 export function buildManagedSessionKey(
   sessionId: string,
   agentId = DEFAULT_MANAGED_AGENT_ID,
 ): string {
   const normalizedSessionId = sessionId.trim();
   const normalizedAgentId = agentId.trim() || DEFAULT_MANAGED_AGENT_ID;
-  return `agent:${normalizedAgentId}:lobsterai:${normalizedSessionId}`;
+  return `agent:${normalizedAgentId}:${MANAGED_SESSION_NAMESPACE}:${normalizedSessionId}`;
 }
 
+/**
+ * 解析当前版本允许识别的本地受管 session key。
+ *
+ * 仅保留两种“当前代”格式：
+ * 1. `jdiclaw:{sessionId}` 这种短格式，本地个别调用链仍可能直接传入。
+ * 2. `agent:{agentId}:jdiclaw:{sessionId}` 这种 canonical 格式。
+ *
+ * 这里刻意不再识别任何 `lobsterai` 变体。任务三要求直接硬切且不做
+ * 迁移，继续接受旧前缀只会把旧数据重新带回新链路，等于把不兼容约束
+ * 重新打破。
+ *
+ * @param sessionKey 待识别的 OpenClaw / 本地 session key。
+ * @returns 解析后的受管会话信息；若不是当前代 key，则返回 null。
+ */
 export function parseManagedSessionKey(sessionKey: string | undefined | null): ManagedSessionKey | null {
   const raw = (sessionKey ?? '').trim();
   if (!raw) return null;
 
-  if (raw.startsWith(LOBSTERAI_SESSION_PREFIX)) {
-    const sessionId = raw.slice(LOBSTERAI_SESSION_PREFIX.length).trim();
+  if (raw.startsWith(MANAGED_SESSION_PREFIX)) {
+    const sessionId = raw.slice(MANAGED_SESSION_PREFIX.length).trim();
     return sessionId ? { agentId: null, sessionId } : null;
   }
 
@@ -44,7 +72,7 @@ export function parseManagedSessionKey(sessionKey: string | undefined | null): M
   }
 
   const parts = raw.split(':');
-  if (parts.length < 4 || parts[0] !== 'agent' || parts[2] !== 'lobsterai') {
+  if (parts.length < 4 || parts[0] !== 'agent' || parts[2] !== MANAGED_SESSION_NAMESPACE) {
     return null;
   }
 

@@ -12,9 +12,21 @@ import {
 } from './libs/coworkMemoryExtractor';
 import { judgeMemoryCandidate } from './libs/coworkMemoryJudge';
 import { getDefaultWorkingDirectory } from './defaultPaths';
+import { APP_ID } from '../shared/platform/brand';
 
-const TASK_WORKSPACE_CONTAINER_DIR = '.lobsterai-tasks';
+const TASK_WORKSPACE_CONTAINER_DIR = `.${APP_ID}-tasks`;
 
+/**
+ * 归一化最近工作区路径，去掉内部任务工作区容器目录。
+ *
+ * 任务执行产生的临时工作区会统一落在 `.${APP_ID}-tasks` 下。这里直接使用
+ * 新品牌目录名，不再识别旧品牌时代的任务容器目录，原因是本次 rollout 明确不兼容
+ * 旧本地标识；如果继续容忍旧目录标记，最近工作区历史会把旧任务容器重新当成
+ * 当前版本数据，导致 UI 里出现错误的根目录。
+ *
+ * @param cwd 可能指向真实项目目录，也可能指向任务容器内子目录的路径。
+ * @returns 若路径位于任务容器内，则返回其真实工作区根目录；否则返回原路径。
+ */
 const normalizeRecentWorkspacePath = (cwd: string): string => {
   const resolved = path.resolve(cwd);
   const marker = `${path.sep}${TASK_WORKSPACE_CONTAINER_DIR}${path.sep}`;

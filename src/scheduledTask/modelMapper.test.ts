@@ -3,6 +3,7 @@ import { makeTask, makeModel } from './fixtures';
 import { TaskModelMapper } from './modelMapper';
 import { ManualTaskPolicy } from './policies/manualPolicy';
 import { CoworkTaskPolicy } from './policies/coworkPolicy';
+import { buildManagedSessionKey } from '../main/libs/openclawChannelSessionSync';
 import {
   OriginKind, BindingKind, ScheduleKind, PayloadKind,
   DeliveryMode, DeliveryChannel, SessionTarget, WakeMode,
@@ -26,7 +27,7 @@ test('mapper.fromWire: with explicit meta, uses meta directly', () => {
 });
 
 test('mapper.fromWire: without meta, falls back to infer', () => {
-  const wire = makeTask({ sessionKey: 'agent:main:lobsterai:sess-1' });
+  const wire = makeTask({ sessionKey: buildManagedSessionKey('sess-1') });
   const model = mapper.fromWire(wire);
   expect(model.origin.kind).toBe(OriginKind.Cowork);
   expect(model.binding.kind).toBe(BindingKind.UISession);
@@ -65,7 +66,7 @@ test('mapper.toWireInput: ui_session binding -> managed sessionKey', () => {
     binding: { kind: BindingKind.UISession, sessionId: 'sess-x' },
   });
   const wire = mapper.toWireInput(model, coworkPolicy);
-  expect(wire.sessionKey).toBe('agent:main:lobsterai:sess-x');
+  expect(wire.sessionKey).toBe(buildManagedSessionKey('sess-x'));
   expect(wire.sessionTarget).toBe(SessionTarget.Main);
 });
 

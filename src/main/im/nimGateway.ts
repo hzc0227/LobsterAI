@@ -20,6 +20,7 @@ import {
   NimTeamPolicy,
   NimSessionType,
 } from './types';
+import { APP_ID } from '../../shared/platform/brand';
 import {
   downloadNimMedia,
   sendNimMediaMessage,
@@ -96,14 +97,25 @@ function buildConversationId(conversationIdUtil: any, accountId: string, session
 }
 
 /**
- * Get SDK data directory
+ * 获取 NIM SDK 数据目录。
+ *
+ * 优先使用 Electron `userData`，这样安装版和开发版都能跟随应用壳层的
+ * 正式数据目录走。只有在极早期初始化阶段拿不到 `userData` 时，才回退到
+ * 用户家目录下的隐藏目录。
+ *
+ * 这里也必须跟着任务三直接切到 `.jdiclaw`，不能继续回退到旧品牌对应的隐藏目录。
+ * 原因不是“迁移麻烦”，而是当前版本明确不兼容旧本地标识；如果继续复用旧
+ * 隐藏目录，就会把旧 SDK 缓存、索引和新版本数据混在一起。
+ *
+ * @param account NIM 账号，用于把不同账号的数据隔离到各自子目录。
+ * @returns 当前账号对应的 SDK 数据目录，确保返回前目录已经存在。
  */
 function getSdkDataPath(account: string): string {
   let baseDir: string;
   try {
     baseDir = app.getPath('userData');
   } catch {
-    baseDir = path.join(os.homedir(), '.lobsterai');
+    baseDir = path.join(os.homedir(), `.${APP_ID}`);
   }
   const dataDir = path.join(baseDir, 'nim-data', account);
   if (!fs.existsSync(dataDir)) {

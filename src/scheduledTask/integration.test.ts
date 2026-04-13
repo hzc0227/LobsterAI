@@ -4,6 +4,7 @@ import { makeTask, makeModel } from './fixtures';
 import { ScheduledTaskMetaStore } from './metaStore';
 import { TaskModelMapper } from './modelMapper';
 import { taskPolicyRegistry } from './policies/registry';
+import { buildManagedSessionKey } from '../main/libs/openclawChannelSessionSync';
 import {
   OriginKind, BindingKind, ScheduleKind, PayloadKind,
   DeliveryMode, DeliveryChannel,
@@ -71,7 +72,7 @@ test('integration: cowork task -> delivery change to webhook -> binding stays', 
 
 test('integration: infer -> persist -> reload uses stored meta (not re-infer)', () => {
   const metaStore = createMetaStore();
-  const wire = makeTask({ sessionKey: 'agent:main:lobsterai:sess-99' });
+  const wire = makeTask({ sessionKey: buildManagedSessionKey('sess-99') });
 
   // 1. First load -- infer
   const model1 = mapper.fromWire(wire);

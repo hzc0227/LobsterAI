@@ -18,7 +18,7 @@ import {
   resolveManagedSessionModelTarget,
   resolveQualifiedAgentModelRef,
 } from './openclawAgentModels';
-import { parseChannelSessionKey } from './openclawChannelSessionSync';
+import { parseChannelSessionKey, parseManagedSessionKey } from './openclawChannelSessionSync';
 import type { OpenClawEngineManager } from './openclawEngineManager';
 import { hasBundledOpenClawExtension } from './openclawLocalExtensions';
 import { getOpenClawTokenProxyPort } from './openclawTokenProxy';
@@ -1665,7 +1665,16 @@ export class OpenClawConfigSync {
           }
         }
 
-        if (!(/^agent:[^:]+:lobsterai:/.test(sessionKey))) {
+        /**
+         * 这里只同步当前代的受管 session。
+         *
+         * 任务三要求本地 session key 直接硬切到 `jdiclaw`，并明确不兼容
+         * 旧 `lobsterai` 契约，因此这里不再尝试识别或迁移旧 key。这样做能
+         * 保证模型同步只命中新版本数据，避免把旧 session store 重新污染回
+         * 当前工作区。
+         */
+        const managedSession = parseManagedSessionKey(sessionKey);
+        if (!managedSession || !managedSession.agentId) {
           continue;
         }
 
@@ -1768,7 +1777,14 @@ export class OpenClawConfigSync {
    * invoke LobsterAI skills.
    */
   private syncAgentsMd(workspaceDir: string, coworkConfig: CoworkConfig): string | undefined {
-    const MARKER = '<!-- LobsterAI managed: do not edit below this line -->';
+    /**
+     * AGENTS.md 受管区块 marker 也跟随品牌直接硬切。
+     *
+     * 当前版本不再尝试识别旧品牌时代写入的受管 marker，因为任务单已经
+     * 明确旧本地数据不兼容。保留旧 marker 兼容会导致我们继续在同一份
+     * AGENTS.md 里混写两代受管内容，反而更难判断哪一段才是当前生效配置。
+     */
+    const MARKER = '<!-- JdiClaw managed: do not edit below this line -->';
 
     try {
       ensureDir(workspaceDir);
