@@ -16,7 +16,7 @@ describe('buildAgentEntry', () => {
       description: '',
       systemPrompt: '',
       identity: '',
-      model: 'lobsterai-server/deepseek-v3.2',
+      model: 'jdiclaw-server/deepseek-v3.2',
       icon: '',
       skillIds: [],
       enabled: true,
@@ -30,7 +30,7 @@ describe('buildAgentEntry', () => {
     expect(result).toMatchObject({
       id: 'main',
       default: true,
-      model: { primary: 'lobsterai-server/deepseek-v3.2' },
+      model: { primary: 'jdiclaw-server/deepseek-v3.2' },
     });
   });
 
@@ -122,10 +122,10 @@ describe('buildManagedAgentEntries', () => {
 
 describe('parsePrimaryModelRef', () => {
   test('parses provider-qualified primary model refs', () => {
-    expect(parsePrimaryModelRef('lobsterai-server/deepseek-v3.2')).toEqual({
-      providerId: 'lobsterai-server',
+    expect(parsePrimaryModelRef('jdiclaw-server/deepseek-v3.2')).toEqual({
+      providerId: 'jdiclaw-server',
       modelId: 'deepseek-v3.2',
-      primaryModel: 'lobsterai-server/deepseek-v3.2',
+      primaryModel: 'jdiclaw-server/deepseek-v3.2',
     });
   });
 
@@ -136,26 +136,26 @@ describe('parsePrimaryModelRef', () => {
 
 describe('resolveManagedSessionModelTarget', () => {
   const availableProviders = {
-    'lobsterai-server': { models: [{ id: 'qwen3.5-plus' }, { id: 'deepseek-v3.2' }] },
+    'jdiclaw-server': { models: [{ id: 'qwen3.5-plus' }, { id: 'deepseek-v3.2' }] },
     minimax: { models: [{ id: 'MiniMax-M2.7' }] },
   };
 
   test('uses fallback target when agent model is empty', () => {
     expect(resolveManagedSessionModelTarget({
       agentModel: '',
-      fallbackPrimaryModel: 'lobsterai-server/qwen3.5-plus',
+      fallbackPrimaryModel: 'jdiclaw-server/qwen3.5-plus',
       availableProviders,
     })).toEqual({
-      providerId: 'lobsterai-server',
+      providerId: 'jdiclaw-server',
       modelId: 'qwen3.5-plus',
-      primaryModel: 'lobsterai-server/qwen3.5-plus',
+      primaryModel: 'jdiclaw-server/qwen3.5-plus',
     });
   });
 
   test('keeps explicit provider-qualified models', () => {
     expect(resolveManagedSessionModelTarget({
       agentModel: 'minimax/MiniMax-M2.7',
-      fallbackPrimaryModel: 'lobsterai-server/qwen3.5-plus',
+      fallbackPrimaryModel: 'jdiclaw-server/qwen3.5-plus',
       availableProviders,
     })).toEqual({
       providerId: 'minimax',
@@ -167,25 +167,25 @@ describe('resolveManagedSessionModelTarget', () => {
   test('resolves bare model ids against available providers', () => {
     expect(resolveManagedSessionModelTarget({
       agentModel: 'deepseek-v3.2',
-      fallbackPrimaryModel: 'lobsterai-server/qwen3.5-plus',
+      fallbackPrimaryModel: 'jdiclaw-server/qwen3.5-plus',
       availableProviders,
     })).toEqual({
-      providerId: 'lobsterai-server',
+      providerId: 'jdiclaw-server',
       modelId: 'deepseek-v3.2',
-      primaryModel: 'lobsterai-server/deepseek-v3.2',
+      primaryModel: 'jdiclaw-server/deepseek-v3.2',
     });
   });
 
   test('falls back to current provider when bare model cannot be resolved uniquely', () => {
     expect(resolveManagedSessionModelTarget({
       agentModel: 'unknown-model',
-      fallbackPrimaryModel: 'lobsterai-server/qwen3.5-plus',
+      fallbackPrimaryModel: 'jdiclaw-server/qwen3.5-plus',
       availableProviders,
-      currentProviderId: 'lobsterai-server',
+      currentProviderId: 'jdiclaw-server',
     })).toEqual({
-      providerId: 'lobsterai-server',
+      providerId: 'jdiclaw-server',
       modelId: 'unknown-model',
-      primaryModel: 'lobsterai-server/unknown-model',
+      primaryModel: 'jdiclaw-server/unknown-model',
     });
   });
 });
@@ -195,12 +195,12 @@ describe('resolveQualifiedAgentModelRef', () => {
     expect(resolveQualifiedAgentModelRef({
       agentModel: 'deepseek-v3.2',
       availableProviders: {
-        'lobsterai-server': { models: [{ id: 'deepseek-v3.2' }] },
+        'jdiclaw-server': { models: [{ id: 'deepseek-v3.2' }] },
         minimax: { models: [{ id: 'MiniMax-M2.7' }] },
       },
     })).toEqual({
       status: 'qualified',
-      primaryModel: 'lobsterai-server/deepseek-v3.2',
+      primaryModel: 'jdiclaw-server/deepseek-v3.2',
     });
   });
 
@@ -209,12 +209,12 @@ describe('resolveQualifiedAgentModelRef', () => {
       agentModel: 'deepseek-v3.2',
       availableProviders: {
         anthropic: { models: [{ id: 'deepseek-v3.2' }] },
-        'lobsterai-server': { models: [{ id: 'deepseek-v3.2' }] },
+        'jdiclaw-server': { models: [{ id: 'deepseek-v3.2' }] },
       },
     })).toEqual({
       status: 'ambiguous',
       modelId: 'deepseek-v3.2',
-      providerIds: ['anthropic', 'lobsterai-server'],
+      providerIds: ['anthropic', 'jdiclaw-server'],
     });
   });
 });

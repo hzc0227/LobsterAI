@@ -1,8 +1,9 @@
-import { test, expect, describe } from 'vitest';
+import { describe,expect, test } from 'vitest';
+
 import {
-  ProviderName,
-  OpenClawProviderId,
   OpenClawApi,
+  OpenClawProviderId,
+  ProviderName,
 } from '../../shared/providers';
 
 const providerApiKeyEnvVar = (providerName: string): string => {
@@ -19,7 +20,7 @@ describe('providerApiKeyEnvVar', () => {
   });
 
   test('replaces hyphens and special chars with underscores', () => {
-    expect(providerApiKeyEnvVar(ProviderName.LobsteraiServer)).toBe('LOBSTER_APIKEY_LOBSTERAI_SERVER');
+    expect(providerApiKeyEnvVar(ProviderName.JdiClawServer)).toBe('LOBSTER_APIKEY_JDICLAW_SERVER');
     expect(providerApiKeyEnvVar('my.provider')).toBe('LOBSTER_APIKEY_MY_PROVIDER');
   });
 

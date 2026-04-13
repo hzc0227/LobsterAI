@@ -2,6 +2,7 @@ import { ShieldCheckIcon } from '@heroicons/react/24/outline';
 import React, { useEffect, useRef,useState } from 'react';
 import { useDispatch,useSelector } from 'react-redux';
 
+import { BRAND_LOGO_ASSET_PATH } from '../../../shared/platform/brand';
 import { agentService } from '../../services/agent';
 import { coworkService } from '../../services/cowork';
 import { i18nService } from '../../services/i18n';
@@ -585,7 +586,7 @@ const CoworkView: React.FC<CoworkViewProps> = ({ onRequestAppSettings, onShowSki
         <div className="max-w-3xl mx-auto px-4 py-16 space-y-12">
           {/* Welcome Section */}
           <div className="text-center space-y-5">
-            <img src="logo.png" alt="logo" className="w-16 h-16 mx-auto" />
+            <img src={BRAND_LOGO_ASSET_PATH} alt="logo" className="w-16 h-16 mx-auto" />
             <h2 className="text-3xl font-bold tracking-tight text-foreground">
               {i18nService.t('coworkWelcome')}
             </h2>

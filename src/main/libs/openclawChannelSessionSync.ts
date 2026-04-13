@@ -2,16 +2,17 @@
  * OpenClaw Channel Session Sync
  *
  * Discovers and maps sessions created by OpenClaw channel extensions (e.g. Telegram)
- * to local Cowork sessions so that conversations are visible in the LobsterAI UI.
+ * to local Cowork sessions so that conversations are visible in the JdiClaw UI.
  */
 
-import type { CoworkStore } from '../coworkStore';
-import type { IMStore } from '../im/imStore';
-import type { Platform } from '../im/types';
+import { session } from '@electron/remote';
+
 import { PlatformRegistry } from '../../shared/platform';
 import { APP_ID } from '../../shared/platform/brand';
+import type { CoworkStore } from '../coworkStore';
 import { t } from '../i18n';
-import { session } from '@electron/remote';
+import type { IMStore } from '../im/imStore';
+import type { Platform } from '../im/types';
 
 
 export const MANAGED_SESSION_NAMESPACE = APP_ID;
@@ -26,7 +27,7 @@ export interface ManagedSessionKey {
 /**
  * 构造当前版本唯一认可的本地受管 session key。
  *
- * 这里直接硬切到 `jdiclaw` 命名空间，不再接受旧的 `lobsterai`
+ * 这里直接硬切到 `jdiclaw` 命名空间，不再接受旧品牌时代的
  * 生成路径，原因是任务三已经明确“不兼容旧 session key”。如果继续
  * 产出旧前缀，会把新品牌会话和历史残留混在一起，导致路由解析、
  * grep 守门和后续排障都无法确认数据到底来自哪一代客户端。
@@ -51,7 +52,7 @@ export function buildManagedSessionKey(
  * 1. `jdiclaw:{sessionId}` 这种短格式，本地个别调用链仍可能直接传入。
  * 2. `agent:{agentId}:jdiclaw:{sessionId}` 这种 canonical 格式。
  *
- * 这里刻意不再识别任何 `lobsterai` 变体。任务三要求直接硬切且不做
+ * 这里刻意不再识别任何旧品牌 session key 变体。任务三要求直接硬切且不做
  * 迁移，继续接受旧前缀只会把旧数据重新带回新链路，等于把不兼容约束
  * 重新打破。
  *
@@ -358,9 +359,9 @@ export class OpenClawChannelSessionSync {
    * Returns the local sessionId if the sessionKey belongs to a channel, or null if not.
    */
   resolveOrCreateSession(sessionKey: string): string | null {
-    // 1. Skip LobsterAI-originated sessions
+    // 1. Skip JdiClaw-originated sessions
     if (isManagedSessionKey(sessionKey)) {
-      console.log('[ChannelSessionSync] skipped: LobsterAI-originated session');
+      console.log('[ChannelSessionSync] skipped: JdiClaw-originated session');
       return null;
     }
 

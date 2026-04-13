@@ -15,6 +15,8 @@
 
 import { session } from 'electron';
 
+import { APP_NAME } from '../appConstants';
+
 // GitHub OAuth App: VS Code's Copilot client ID (public, non-secret)
 const GITHUB_CLIENT_ID = 'Iv1.b507a08c87ecfe98';
 const DEVICE_CODE_URL = 'https://github.com/login/device/code';
@@ -263,7 +265,7 @@ export async function getGitHubUser(accessToken: string): Promise<string> {
     headers: {
       'Authorization': `token ${accessToken}`,
       'Accept': 'application/json',
-      'User-Agent': 'LobsterAI',
+      'User-Agent': APP_NAME,
     },
   });
   return data.login || 'unknown';

@@ -27,9 +27,9 @@
 
 它的核心体验是 **Cowork 模式**，能够在用户审批下于本地或沙箱环境中执行工具、操作文件和运行命令。按需完成相关配置后，也可以通过钉钉、飞书、Telegram、Discord 等 IM 平台从移动端远程触发同一套工作流。
 
-品牌说明：当前仅完成对外文档口径向 **JdiClaw** 的收敛，仓库路径、安装包身份、运行时标识以及部分技术资源名称在迁移期内仍保留历史 **LobsterAI** 命名。
+品牌说明：当前 rollout 已将桌面产品身份硬切为 **JdiClaw**。运行时壳层身份、本地数据标识、导出契约、session key 和所有用户可见文案都按 JdiClaw 口径处理，并明确不兼容旧 LobsterAI 数据与协议别名。
 
-视觉资源说明：当前 `public/jdiclaw-logo.svg` 中的 JdiClaw 标识为临时占位资源。`public/logo.png` 仍作为兼容镜像保留，供现有应用内引用继续复用，待最终品牌资源交付后再统一替换。
+视觉资源说明：`public/jdiclaw-logo.svg` 与 `public/jdiclaw-logo.png` 是当前仓库中唯一的品牌入口资源，应用壳层、About、分享卡片和图标生成脚本统一从这组资源派生。
 
 ## 核心特性
 
@@ -61,8 +61,8 @@
 
 ```bash
 # 克隆仓库
-git clone https://github.com/netease-youdao/LobsterAI.git
-cd lobsterai
+git clone <your-jdiclaw-repo-url>.git
+cd JdiClaw
 
 # 安装依赖
 npm install
@@ -70,8 +70,6 @@ npm install
 # 启动开发环境（Vite 开发服务器 + Electron 热重载）
 npm run electron:dev
 ```
-
-当前品牌迁移阶段，仓库地址与本地目录名仍保持不变。
 
 开发服务器默认运行在 `http://localhost:5175`。
 
@@ -357,7 +355,7 @@ JdiClaw 内置记忆系统，能够跨会话记住你的个人信息和偏好，
 
 ## 数据存储
 
-所有数据存储在本地 SQLite 数据库（`lobsterai.sqlite`，位于用户数据目录）。
+所有数据存储在本地 SQLite 数据库（`jdiclaw.sqlite`，位于用户数据目录）。
 
 | 表 | 用途 |
 |----|------|

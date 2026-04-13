@@ -24,17 +24,17 @@ export const EXPORT_PASSWORD = 'jdiclaw-APP';
 export const BRAND_AUTHOR_NAME = 'JdiClaw';
 export const BRAND_CONTACT_EMAIL = 'jdiclaw.project@rd.netease.com';
 export const BRAND_USER_COMMUNITY = '10227855752';
+export const BRAND_LOGO_ASSET_PATH = '/jdiclaw-logo.svg';
+export const BRAND_LOGO_RASTER_ASSET_PATH = '/jdiclaw-logo.png';
 
 export const BrandLink = {
   UserManual: 'userManual',
-  ServiceTerms: 'serviceTerms',
 } as const;
 
 export type BrandLink = typeof BrandLink[keyof typeof BrandLink];
 
 const BRAND_LINK_URLS: Record<BrandLink, string> = {
   [BrandLink.UserManual]: 'https://joyspace.jd.com/h/personal/pages/tUGZC42TEC79IIcvqkSA',
-  [BrandLink.ServiceTerms]: 'https://c.youdao.com/dict/hardware/lobsterai/lobsterai_service.html',
 };
 
 /**

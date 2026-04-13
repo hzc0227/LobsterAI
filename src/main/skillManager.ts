@@ -6,6 +6,7 @@ import fs from 'fs';
 import yaml from 'js-yaml';
 import path from 'path';
 
+import { APP_NAME } from './appConstants';
 import { cpRecursiveSync } from './fsCompat';
 import { t } from './i18n';
 import { getElectronNodeRuntimePath } from './libs/coworkUtil';
@@ -255,6 +256,8 @@ const SKILL_STATE_KEY = 'skills_state';
 const WATCH_DEBOUNCE_MS = 250;
 const CLAUDE_SKILLS_DIR_NAME = '.claude';
 const CLAUDE_SKILLS_SUBDIR = 'skills';
+const SKILL_DOWNLOAD_USER_AGENT = `${APP_NAME} Skill Downloader`;
+const SKILL_TEMP_PREFIX = 'jdiclaw-skill';
 
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
 
@@ -779,15 +782,15 @@ const downloadGithubArchive = async (
     archiveUrlCandidates.push(
       {
         url: `https://github.com/${source.owner}/${source.repo}/archive/refs/heads/${encodedRef}.zip`,
-        headers: { 'User-Agent': 'LobsterAI Skill Downloader' },
+        headers: { 'User-Agent': SKILL_DOWNLOAD_USER_AGENT },
       },
       {
         url: `https://github.com/${source.owner}/${source.repo}/archive/refs/tags/${encodedRef}.zip`,
-        headers: { 'User-Agent': 'LobsterAI Skill Downloader' },
+        headers: { 'User-Agent': SKILL_DOWNLOAD_USER_AGENT },
       },
       {
         url: `https://github.com/${source.owner}/${source.repo}/archive/${encodedRef}.zip`,
-        headers: { 'User-Agent': 'LobsterAI Skill Downloader' },
+        headers: { 'User-Agent': SKILL_DOWNLOAD_USER_AGENT },
       }
     );
   }
@@ -796,7 +799,7 @@ const downloadGithubArchive = async (
     url: `https://api.github.com/repos/${source.owner}/${source.repo}/zipball${encodedRef ? `/${encodedRef}` : ''}`,
     headers: {
       Accept: 'application/vnd.github+json',
-      'User-Agent': 'LobsterAI Skill Downloader',
+      'User-Agent': SKILL_DOWNLOAD_USER_AGENT,
       'X-GitHub-Api-Version': '2022-11-28',
     },
   });
@@ -1090,7 +1093,7 @@ const isRemoteZipUrl = (source: string): boolean => {
 const downloadZipUrl = async (zipUrl: string, tempRoot: string): Promise<string> => {
   const response = await session.defaultSession.fetch(zipUrl, {
     method: 'GET',
-    headers: { 'User-Agent': 'LobsterAI Skill Downloader' },
+    headers: { 'User-Agent': SKILL_DOWNLOAD_USER_AGENT },
   });
 
   if (!response.ok) {
@@ -1560,7 +1563,7 @@ export class SkillManager {
         if (stat.isFile()) {
           if (isZipFile(localSource)) {
             console.log('[SkillManager] downloadSkill: detected local zip file');
-            const tempRoot = fs.mkdtempSync(path.join(app.getPath('temp'), 'lobsterai-skill-zip-'));
+            const tempRoot = fs.mkdtempSync(path.join(app.getPath('temp'), `${SKILL_TEMP_PREFIX}-zip-`));
             await extractZip(localSource, { dir: tempRoot });
             localSource = tempRoot;
             cleanupPath = tempRoot;
@@ -1575,19 +1578,19 @@ export class SkillManager {
         }
       } else if (isRemoteZipUrl(trimmed)) {
         console.log('[SkillManager] downloadSkill: detected remote zip URL');
-        const tempRoot = fs.mkdtempSync(path.join(app.getPath('temp'), 'lobsterai-skill-zip-'));
+        const tempRoot = fs.mkdtempSync(path.join(app.getPath('temp'), `${SKILL_TEMP_PREFIX}-zip-`));
         cleanupPath = tempRoot;
         localSource = await downloadZipUrl(trimmed, tempRoot);
       } else if (isNpmPackageSpec(trimmed)) {
         console.log(`[SkillManager] downloadSkill: detected npm package spec "${trimmed}"`);
-        const tempRoot = fs.mkdtempSync(path.join(app.getPath('temp'), 'lobsterai-skill-npm-'));
+        const tempRoot = fs.mkdtempSync(path.join(app.getPath('temp'), `${SKILL_TEMP_PREFIX}-npm-`));
         cleanupPath = tempRoot;
         localSource = await downloadNpmPackage(trimmed, tempRoot);
         console.log(`[SkillManager] downloadSkill: npm package extracted to ${localSource}`);
       } else if (parseClawhubUrl(trimmed)) {
         const clawhubParsed = parseClawhubUrl(trimmed)!;
         console.log(`[SkillManager] downloadSkill: detected ClawHub URL, skill name="${clawhubParsed.name}"`);
-        const tempRoot = fs.mkdtempSync(path.join(app.getPath('temp'), 'lobsterai-skill-clawhub-'));
+        const tempRoot = fs.mkdtempSync(path.join(app.getPath('temp'), `${SKILL_TEMP_PREFIX}-clawhub-`));
         cleanupPath = tempRoot;
         const env = buildSkillEnv();
         await downloadClawhubSkill(clawhubParsed.name, tempRoot, env);
@@ -1597,7 +1600,7 @@ export class SkillManager {
         if (!normalized) {
           return { success: false, error: t('skillErrInvalidSource') };
         }
-        const tempRoot = fs.mkdtempSync(path.join(app.getPath('temp'), 'lobsterai-skill-'));
+        const tempRoot = fs.mkdtempSync(path.join(app.getPath('temp'), `${SKILL_TEMP_PREFIX}-`));
         cleanupPath = tempRoot;
         const repoName = normalizeFolderName(normalized.repoNameHint || deriveRepoName(normalized.repoUrl));
         const clonePath = path.join(tempRoot, repoName);
@@ -1781,7 +1784,7 @@ export class SkillManager {
       const root = this.ensureSkillsRoot();
 
       // Download new version (reuse downloadSkill's download logic)
-      const tempRoot = fs.mkdtempSync(path.join(app.getPath('temp'), 'lobsterai-skill-upgrade-'));
+      const tempRoot = fs.mkdtempSync(path.join(app.getPath('temp'), `${SKILL_TEMP_PREFIX}-upgrade-`));
       cleanupPath = tempRoot;
 
       let localSource: string;

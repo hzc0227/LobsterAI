@@ -16,6 +16,8 @@ describe('shared platform brand exports', () => {
     expect(exports.EXPORT_PASSWORD).toBe('jdiclaw-APP');
     expect(exports.BRAND_CONTACT_EMAIL).toBe('jdiclaw.project@rd.netease.com');
     expect(exports.BRAND_USER_COMMUNITY).toBe('10227855752');
+    expect(exports.BRAND_LOGO_ASSET_PATH).toBe('/jdiclaw-logo.svg');
+    expect(exports.BRAND_LOGO_RASTER_ASSET_PATH).toBe('/jdiclaw-logo.png');
 
     expect(exports.BrandLink).toBeDefined();
     expect(exports.getBrandLinkUrl).toBeTypeOf('function');
@@ -24,6 +26,6 @@ describe('shared platform brand exports', () => {
     const getBrandLinkUrl = exports.getBrandLinkUrl as (link: string) => string;
 
     expect(getBrandLinkUrl(brandLink.UserManual)).toBe('https://joyspace.jd.com/h/personal/pages/tUGZC42TEC79IIcvqkSA');
-    expect(getBrandLinkUrl(brandLink.ServiceTerms)).toBe('https://c.youdao.com/dict/hardware/lobsterai/lobsterai_service.html');
+    expect(Object.prototype.hasOwnProperty.call(brandLink, 'ServiceTerms')).toBe(false);
   });
 });

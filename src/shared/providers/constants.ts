@@ -21,7 +21,7 @@
 // ═══════════════════════════════════════════════════════
 
 // ─── Provider Name ──────────────────────────────────────────────────────
-// providerName identifies the LobsterAI internal provider (config key).
+// providerName identifies the JdiClaw internal provider (config key).
 export const ProviderName = {
   OpenAI: 'openai',
   Gemini: 'gemini',
@@ -38,7 +38,7 @@ export const ProviderName = {
   OpenRouter: 'openrouter',
   Ollama: 'ollama',
   Custom: 'custom',
-  LobsteraiServer: 'lobsterai-server',
+  JdiClawServer: 'jdiclaw-server',
   Copilot: 'github-copilot',
 } as const;
 export type ProviderName = typeof ProviderName[keyof typeof ProviderName];
@@ -46,7 +46,7 @@ export type ProviderName = typeof ProviderName[keyof typeof ProviderName];
 // ─── OpenClaw Provider ID ───────────────────────────────────────────────
 // OpenClaw gateway provider identifiers. May differ from ProviderName.
 export const OpenClawProviderId = {
-  LobsteraiServer: 'lobsterai-server',
+  JdiClawServer: 'jdiclaw-server',
   Moonshot: 'moonshot',
   Google: 'google',
   Anthropic: 'anthropic',

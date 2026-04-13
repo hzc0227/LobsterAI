@@ -1,6 +1,3 @@
-import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import { createPortal } from 'react-dom';
-import { useDispatch, useSelector } from 'react-redux';
 import { ShareIcon } from '@heroicons/react/20/solid';
 import {
   CheckIcon,
@@ -9,19 +6,25 @@ import {
   PhotoIcon,
 } from '@heroicons/react/24/outline';
 import { FolderIcon } from '@heroicons/react/24/solid';
-import {
-  selectCurrentSession,
-  selectIsStreaming,
-  selectRemoteManaged,
-  selectLastMessageContent,
-  selectCurrentMessagesLength,
-} from '../../store/selectors/coworkSelectors';
+import React, { useCallback, useEffect, useMemo,useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useDispatch, useSelector } from 'react-redux';
+
 import { getScheduledReminderDisplayText } from '../../../scheduledTask/reminderText';
+import { BRAND_LOGO_RASTER_ASSET_PATH } from '../../../shared/platform/brand';
+import { APP_NAME } from '../../constants/app';
 import { coworkService } from '../../services/cowork';
 import { i18nService } from '../../services/i18n';
 import { RootState } from '../../store';
+import {
+  selectCurrentMessagesLength,
+  selectCurrentSession,
+  selectIsStreaming,
+  selectLastMessageContent,
+  selectRemoteManaged,
+} from '../../store/selectors/coworkSelectors';
 import { setActiveSkillIds } from '../../store/slices/skillSlice';
-import type { CoworkMessage, CoworkMessageMetadata, CoworkImageAttachment } from '../../types/cowork';
+import type { CoworkImageAttachment,CoworkMessage, CoworkMessageMetadata } from '../../types/cowork';
 import type { Skill } from '../../types/skill';
 import { getCompactFolderName } from '../../utils/path';
 import Modal from '../common/Modal';
@@ -38,7 +41,6 @@ import WindowTitleBar from '../window/WindowTitleBar';
 import CoworkPromptInput, { type CoworkPromptInputRef } from './CoworkPromptInput';
 import DiffView, { extractDiffFromToolInput } from './DiffView';
 import LazyRenderTurn, { clearHeightCache } from './LazyRenderTurn';
-import { APP_NAME } from '../../constants/app';
 
 interface CoworkSessionDetailProps {
   onManageSkills?: () => void;
@@ -236,7 +238,7 @@ const composeExportCanvas = async (
     const img = new Image();
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error('Failed to load logo'));
-    img.src = 'logo.png';
+    img.src = BRAND_LOGO_RASTER_ASSET_PATH;
   });
 
   // Logo with rounded clipping

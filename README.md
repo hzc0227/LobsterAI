@@ -27,9 +27,9 @@
 
 Its core experience is **Cowork mode** — it executes tools, manipulates files, and runs commands in a local or sandboxed environment under user approval. Where configured, the same workflow can also be triggered through Telegram, Discord, DingTalk, or Feishu (Lark) for remote collaboration from mobile devices.
 
-Branding note: this repository is currently updating its external product language to **JdiClaw**. Repository paths, package/runtime identifiers, installer identity, and some technical asset names still retain the legacy **LobsterAI** naming during the transition.
+Branding note: the current rollout hard-cuts the desktop product identity to **JdiClaw**. Runtime shell identity, local data markers, exported provider payloads, session keys, and user-visible copy are treated as JdiClaw-only and are intentionally incompatible with legacy LobsterAI data or protocol aliases.
 
-Visual asset note: the current JdiClaw mark at `public/jdiclaw-logo.svg` is a temporary placeholder asset. `public/logo.png` is kept as a compatibility mirror for existing in-app references until the final brand package arrives.
+Visual asset note: `public/jdiclaw-logo.svg` and `public/jdiclaw-logo.png` are now the only in-repo brand entry assets used by the app shell, About surface, share card generation, and icon-generation scripts.
 
 ## Key Features
 
@@ -61,8 +61,8 @@ Visual asset note: the current JdiClaw mark at `public/jdiclaw-logo.svg` is a te
 
 ```bash
 # Clone the repository
-git clone https://github.com/netease-youdao/LobsterAI.git
-cd lobsterai
+git clone <your-jdiclaw-repo-url>.git
+cd JdiClaw
 
 # Install dependencies
 npm install
@@ -70,8 +70,6 @@ npm install
 # Start development (Vite dev server + Electron with hot reload)
 npm run electron:dev
 ```
-
-The repository URL and local directory name remain unchanged during the current branding transition.
 
 The dev server runs at `http://localhost:5175` by default.
 
@@ -355,7 +353,7 @@ Extracted memories are automatically deduplicated and merged, then injected into
 
 ## Data Storage
 
-All data is stored in a local SQLite database (`lobsterai.sqlite` in the user data directory).
+All data is stored in a local SQLite database (`jdiclaw.sqlite` in the user data directory).
 
 | Table | Purpose |
 |-------|---------|

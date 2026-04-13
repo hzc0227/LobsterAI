@@ -4,7 +4,7 @@ import type { Model } from '../store/slices/modelSlice';
 
 export function toOpenClawModelRef(model: Pick<Model, 'id' | 'providerKey' | 'isServerModel'>): string {
   if (model.isServerModel) {
-    return `${OpenClawProviderId.LobsteraiServer}/${model.id}`;
+    return `${OpenClawProviderId.JdiClawServer}/${model.id}`;
   }
 
   return `${ProviderRegistry.getOpenClawProviderId(model.providerKey ?? '')}/${model.id}`;

@@ -1,8 +1,9 @@
-import { test, expect, describe } from 'vitest';
+import { describe,expect, test } from 'vitest';
+
 import {
+  ApiFormat,
   ProviderName,
   ProviderRegistry,
-  ApiFormat,
 } from './constants';
 
 describe('ProviderName constants', () => {
@@ -10,7 +11,7 @@ describe('ProviderName constants', () => {
     expect(ProviderName.OpenAI).toBe('openai');
     expect(ProviderName.DeepSeek).toBe('deepseek');
     expect(ProviderName.Custom).toBe('custom');
-    expect(ProviderName.LobsteraiServer).toBe('lobsterai-server');
+    expect(ProviderName.JdiClawServer).toBe('jdiclaw-server');
   });
 });
 
@@ -19,7 +20,7 @@ describe('ProviderRegistry', () => {
     const ids = ProviderRegistry.providerIds;
     expect(ids.length).toBe(15);
     expect(ids).not.toContain(ProviderName.Custom);
-    expect(ids).not.toContain(ProviderName.LobsteraiServer);
+    expect(ids).not.toContain(ProviderName.JdiClawServer);
   });
 
   test('get returns definition for known provider', () => {

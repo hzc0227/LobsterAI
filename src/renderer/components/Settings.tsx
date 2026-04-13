@@ -4,6 +4,7 @@ import React, { useCallback,useEffect, useMemo, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
 import {
+  BRAND_LOGO_ASSET_PATH,
   BRAND_USER_COMMUNITY,
   BrandLink,
   getBrandLinkUrl,
@@ -3904,7 +3905,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, notice
           <div className="flex min-h-full flex-col items-center pt-6 pb-3">
             {/* Logo & App Name */}
             <img
-              src="logo.png"
+              src={BRAND_LOGO_ASSET_PATH}
               alt={APP_NAME}
               className="w-16 h-16 mb-3 cursor-pointer select-none"
               onClick={() => {

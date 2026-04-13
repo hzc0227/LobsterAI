@@ -1,8 +1,9 @@
 import { app } from 'electron';
 import fs from 'fs';
 import path from 'path';
-import type { SqliteStore } from '../sqliteStore';
+
 import type { IMStore } from '../im/imStore';
+import type { SqliteStore } from '../sqliteStore';
 
 export type EnterpriseUIAction = 'hide' | 'disable' | 'readonly';
 
@@ -76,10 +77,6 @@ export function syncEnterpriseConfig(
   const versionChanged = previousManifest?.version !== manifest.version;
 
   store.set('enterprise_config', manifest);
-
-  if (manifest.autoAcceptPrivacy) {
-    store.set('privacy_agreed', true);
-  }
 
   // SQLite writes are cheap — always sync to ensure consistency.
   if (manifest.sync.openclaw) {
